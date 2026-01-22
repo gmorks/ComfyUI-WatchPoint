@@ -288,7 +288,7 @@ class WatchPointWindow:
         tk.Button(self.toolbar, text="1:1", command=self._zoom_1to1, **btn_style).pack(side=tk.LEFT, padx=2)
         
         self.size_var = tk.StringVar(value="Current")
-        size_menu = tk.OptionMenu(self.toolbar, self.size_var, "800x600", "1024x768", "1920x1080", "Half Vertical", "Quarter", command=self._change_window_size)
+        size_menu = tk.OptionMenu(self.toolbar, self.size_var, "800x600", "1024x768", "1920x1080", "Half Vertical", "Half Horizontal", "Quarter", command=self._change_window_size)
         size_menu.config(bg='#3a3a3a', fg='white', relief=tk.FLAT)
         size_menu.pack(side=tk.LEFT, padx=2)
         
@@ -314,7 +314,6 @@ class WatchPointWindow:
         self.root.bind("<r>", lambda e: self._reset_zoom())
         self.root.bind("<t>", lambda e: self._toggle_toolbar())
         self.root.bind("<p>", lambda e: self._toggle_drawer())
-        self.root.bind("<Escape>", lambda e: self._close_window())
         self.root.protocol("WM_DELETE_WINDOW", self._close_window)
     
     def _update_image(self):
@@ -419,21 +418,96 @@ class WatchPointWindow:
         pass
     
     def _open_settings(self):
-        WatchPointSettingsDialog(self.root, self.settings)
+        WatchPointSettingsDialog(self.root, self.settings, self)
     
     def _close_window(self):
         self.windows[self.display_idx]["running"] = False
+        try:
+            # Save window geometry and state before closing
+            size_mode = self.size_var.get()
+            if size_mode in ["Half Vertical", "Half Horizontal", "Quarter"]:
+                self.settings['window_size_mode'] = size_mode
+            else:
+                self.settings['window_size_mode'] = "fixed"
+                self.settings['window_width'] = self.root.winfo_width()
+                self.settings['window_height'] = self.root.winfo_height()
+
+            self.settings['window_x'] = self.root.winfo_x()
+            self.settings['window_y'] = self.root.winfo_y()
+            self.settings['show_toolbar'] = self.toolbar_visible 
+
+            settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchpoint_settings.json")
+            with open(settings_file, 'w') as f:
+                json.dump(self.settings, f, indent=2)
+        except Exception as e: 
+            print(f"Watch Point: Could not save window settings on close: {e}")
+
         try: self.root.destroy()
         except: pass
 
 class WatchPointSettingsDialog:
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, window_instance):
         self.settings = settings
+        self.window_instance = window_instance
+        
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Settings")
-        self.dialog.geometry("300x200")
-        tk.Label(self.dialog, text="Settings placeholder").pack(pady=20)
-        tk.Button(self.dialog, text="Close", command=self.dialog.destroy).pack()
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        self.dialog.resizable(False, False)
+
+        # Variables
+        self.show_toolbar_var = tk.BooleanVar(value=self.settings.get("show_toolbar", True))
+        self.save_format_var = tk.StringVar(value=self.settings.get("save_format", "png"))
+        self.jpeg_quality_var = tk.IntVar(value=self.settings.get("jpeg_quality", 90))
+
+        # UI
+        frame = tk.Frame(self.dialog, padx=15, pady=15)
+        frame.pack(fill="both", expand=True)
+
+        tk.Checkbutton(frame, text="Show Toolbar on Startup", variable=self.show_toolbar_var).pack(anchor="w")
+
+        format_frame = tk.LabelFrame(frame, text="Default Save Format", padx=10, pady=10)
+        format_frame.pack(anchor="w", fill="x", pady=(10, 5))
+        tk.Radiobutton(format_frame, text="PNG (lossless)", variable=self.save_format_var, value="png", command=self._toggle_jpeg_quality).pack(anchor="w")
+        tk.Radiobutton(format_frame, text="JPEG (compressed)", variable=self.save_format_var, value="jpeg", command=self._toggle_jpeg_quality).pack(anchor="w")
+
+        self.quality_frame = tk.LabelFrame(frame, text="JPEG Quality", padx=10, pady=10)
+        self.quality_frame.pack(anchor="w", fill="x", pady=(0, 10))
+        self.quality_scale = tk.Scale(self.quality_frame, from_=1, to=100, orient="horizontal", variable=self.jpeg_quality_var)
+        self.quality_scale.pack(anchor="w", fill="x")
+        self._toggle_jpeg_quality()
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(fill="x", side="bottom")
+        tk.Button(button_frame, text="Save", command=self._save_and_close).pack(side="right", padx=(5,0))
+        tk.Button(button_frame, text="Cancel", command=self.dialog.destroy).pack(side="right")
+
+        self.dialog.wait_window()
+
+    def _toggle_jpeg_quality(self):
+        state = "normal" if self.save_format_var.get() == "jpeg" else "disabled"
+        if hasattr(self, 'quality_frame'):
+            for child in self.quality_frame.winfo_children():
+                child.configure(state=state)
+
+    def _save_and_close(self):
+        new_show_toolbar = self.show_toolbar_var.get()
+        if self.window_instance.toolbar_visible != new_show_toolbar:
+            self.window_instance._toggle_toolbar()
+
+        self.settings["show_toolbar"] = new_show_toolbar
+        self.settings["save_format"] = self.save_format_var.get()
+        self.settings["jpeg_quality"] = self.jpeg_quality_var.get()
+
+        settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchpoint_settings.json")
+        try:
+            with open(settings_file, 'w') as f:
+                json.dump(self.settings, f, indent=2)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not save settings:\n{e}", parent=self.dialog)
+
+        self.dialog.destroy()
 
 # Node registration
 NODE_CLASS_MAPPINGS = {

@@ -15,6 +15,7 @@ Watch Point provides two simultaneous preview methods:
 - 💾 Save images directly from preview
 - 📋 Copy to clipboard
 - ⚙️ Customizable settings
+- 📡 **Signal Scout Panel**: Display text from your workflow in a side panel.
 
 ### Floating Preview (JavaScript)
 - 📌 Uses ComfyUI's native preview system
@@ -36,18 +37,29 @@ pip install pillow screeninfo
 
 3. Restart ComfyUI
 
-## Usage
+## Nodes
 
-1. Add **Watch Point** node to your workflow
-2. Connect image input from any node
+### 👁️ Watch Point
+The main preview node.
+1. Add **Watch Point** to your workflow.
+2. Connect an `IMAGE` input.
 3. Enable/disable previews:
-   - `floating_preview`: Enable ComfyUI's built-in preview
-   - `monitor_preview`: Enable external monitor window
-4. Select target monitor from dropdown
-5. Connect output to next node (pass-through)
+   - `floating_preview`: Enable ComfyUI's built-in preview.
+   - `monitor_preview`: Enable the external monitor window.
+4. Select the target `monitor` from the dropdown.
+5. The node acts as a pass-through for the `IMAGE` output.
+
+### 📡 WP Signal Scout
+A debug node to send text to the Monitor Preview window.
+1. Add **WP Signal Scout** to your workflow (found in `WatchPoint/Debug`).
+2. Connect any `STRING` input.
+3. The text will appear in the side panel of the external window.
 
 ### Example Workflow
 ```
+[Primitive] → [WP Signal Scout]
+   (text)          ↓ (sends text to window)
+
 [Load Image] → [Watch Point] → [Upscale] → [Save Image]
                      ↓
               (Dual Preview)
@@ -63,6 +75,7 @@ pip install pillow screeninfo
 ### Keyboard
 - **R**: Reset zoom and pan
 - **T**: Toggle toolbar
+- **P**: Toggle Signal Scout panel
 - **1**: Zoom 1:1 (100% actual size)
 - **ESC**: Close window
 
