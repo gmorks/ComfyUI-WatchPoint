@@ -1,4 +1,12 @@
+# Python
 __pycache__/
 *.pyc
-.idea/
+*.pyo
+*.pyd
+
+# State files (no subir el JSON con datos)
+data/list_state.json
+
+# IDE
 .vscode/
+.idea/

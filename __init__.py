@@ -1,18 +1,11 @@
-"""
-ComfyUI Watch Point
-Dual preview system: External monitor (Tkinter) + Floating preview (JavaScript)
-"""
+from .watch_point import NODE_CLASS_MAPPINGS as WP_CLASS, NODE_DISPLAY_NAME_MAPPINGS as WP_DISPLAY
+from .nodes.list_cycler import NODE_CLASS_MAPPINGS as LC_CLASS, NODE_DISPLAY_NAME_MAPPINGS as LC_DISPLAY
 
-from .watch_point import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+# Combinamos solo lo necesario
+NODE_CLASS_MAPPINGS = {**WP_CLASS, **LC_CLASS}
+NODE_DISPLAY_NAME_MAPPINGS = {**WP_DISPLAY, **LC_DISPLAY}
 
-# Indicate that we have JavaScript files
-WEB_DIRECTORY = "js"
+# El JS sigue siendo necesario para los botones del List Cycler
+WEB_DIRECTORY = "js" 
 
-__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS', 'WEB_DIRECTORY']
-
-print("✅ Watch Point Extension: Loaded")
-print("   👁️  Dual Preview System")
-print("   📺 Monitor Preview: Tkinter window on external monitor")
-print("   🖼️  Floating Preview: JavaScript floating window")
-print("   ⌨️  Shortcuts: Ctrl+Alt+W (toggle floating)")
-print("   📁 JavaScript extension registered")
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
