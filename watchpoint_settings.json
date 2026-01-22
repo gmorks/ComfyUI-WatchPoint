@@ -3,8 +3,8 @@
   "window_height": 600,
   "window_x": 0,
   "window_y": 0,
+  "window_size_mode": "Half Vertical",
   "show_toolbar": true,
   "save_format": "png",
-  "jpeg_quality": 90,
-  "window_size_mode": "Half Vertical"
+  "jpeg_quality": 90
 }
