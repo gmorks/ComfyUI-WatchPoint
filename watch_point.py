@@ -7,8 +7,7 @@ import numpy as np
 from threading import Thread, Lock
 import folder_paths
 
-# --- Constants and Globals ---
-ICON_BASE64 = ""
+
 try:
     from screeninfo import get_monitors
     SCREENINFO_AVAILABLE = True
@@ -126,13 +125,15 @@ class WindowManager:
             self._cleanup_window(display_idx)
 
     def _apply_icon(self, root):
-        """Applies the base64 icon to the window if available."""
-        if ICON_BASE64:
-            try:
-                icon_img = tk.PhotoImage(data=ICON_BASE64)
+        """Applies the icon from a file to the window."""
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(script_dir, "preview_monitor_icon.png")
+            if os.path.exists(icon_path):
+                icon_img = tk.PhotoImage(file=icon_path)
                 root.iconphoto(True, icon_img)
-            except tk.TclError:
-                print("Watch Point: Could not apply icon.")
+        except tk.TclError:
+            print("Watch Point: Could not apply icon. Ensure it's a valid PNG/GIF.")
 
     def _apply_geometry(self, root, display_idx):
         """Calculates and applies the window's initial size and position."""
@@ -144,17 +145,21 @@ class WindowManager:
         if geom_str:
             root.geometry(geom_str)
 
-        x = self.settings_manager.get("window_x")
-        y = self.settings_manager.get("window_y")
-
-        if x is not None and y is not None:
-            root.geometry(f"+{x}+{y}")
-        elif SCREENINFO_AVAILABLE:
+        # Prioritize monitor selection, then fallback to saved position
+        position_set = False
+        if SCREENINFO_AVAILABLE:
             try:
                 m = get_monitors()[display_idx]
                 root.geometry(f"+{m.x + 50}+{m.y + 50}")
+                position_set = True
             except IndexError:
-                pass # Fallback to default position
+                print(f"Watch Point: Monitor index {display_idx} is out of range. Falling back.")
+
+        if not position_set and self.settings_manager.get("use_last_known_position", False):
+            x = self.settings_manager.get("window_x")
+            y = self.settings_manager.get("window_y")
+            if x is not None and y is not None:
+                root.geometry(f"+{x}+{y}")
 
     def calculate_geometry_string(self, root, size_mode, default_w, default_h):
         """Returns a geometry string (e.g., '800x600') based on the size mode."""
@@ -190,6 +195,7 @@ class WatchPoint:
     """The main ComfyUI node class."""
     def __init__(self):
         self.window_manager = WindowManager()
+        self.last_display_idx = -1
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -218,6 +224,12 @@ class WatchPoint:
             display_idx = int(monitor.split(" ")[1])
         except (ValueError, IndexError):
             display_idx = 0
+
+        # Close the previous window if the monitor has changed
+        if self.last_display_idx != -1 and self.last_display_idx != display_idx:
+            self.window_manager.hide_window(self.last_display_idx)
+
+        self.last_display_idx = display_idx
 
         if monitor_preview:
             image = 255.0 * images[0].cpu().numpy()
