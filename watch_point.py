@@ -1,5 +1,6 @@
 import os
 import json
+import sys  # NUEVO: Importar sys para debug dumps
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
@@ -7,6 +8,210 @@ import numpy as np
 from threading import Thread, Lock
 import folder_paths
 import io
+import time
+import threading
+
+# --- Global Shutdown Registry ---
+class ShutdownRegistry:
+    """Registro global para manejar shutdown sin atexit"""
+    _instance = None
+    _nodes = []
+    _shutdown_called = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ShutdownRegistry, cls).__new__(cls)
+        return cls._instance
+    
+    def register(self, node):
+        """Registrar un nodo para cleanup"""
+        if not self._shutdown_called:
+            self._nodes.append(node)
+    
+    def shutdown_all(self):
+        """Shutdown todos los nodos registrados"""
+        if self._shutdown_called:
+            return
+        self._shutdown_called = True
+        
+        wp_logger.info(f"Limpiando {len(self._nodes)} nodos...", "ShutdownRegistry")
+        for node in self._nodes[:]:
+            try:
+                if hasattr(node, 'cleanup'):
+                    node.cleanup()
+            except Exception as e:
+                wp_logger.error(f"Error en cleanup: {e}", "ShutdownRegistry")
+        self._nodes.clear()
+
+# Crear instancia global
+shutdown_registry = ShutdownRegistry()
+
+# --- Logging Estructurado ---
+class WatchPointLogger:
+    """Sistema de logging estructurado para WatchPoint"""
+    
+    def __init__(self):
+        self.enabled = True
+        self.log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR
+        self.logs = []
+        self.max_logs = 100
+        self.debug_mode = False  # NUEVO: Modo debug
+        self.debug_log_dir = "debug_logs"  # NUEVO: Directorio para logs de debug
+        self.debug_session_id = None  # NUEVO: ID única para sesión de debug
+        self.config_file = os.path.join(os.path.dirname(__file__), "watchpoint_debug_config.json")
+        self.load_debug_config()  # Cargar configuración persistente
+    
+    def log(self, level, message, component="WatchPoint"):
+        """Log un mensaje con nivel y componente"""
+        if not self.enabled:
+            return
+        
+        # Verificar nivel de log
+        levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3}
+        if levels.get(level, 1) < levels.get(self.log_level, 1):
+            return
+        
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = {
+            "timestamp": timestamp,
+            "level": level,
+            "component": component,
+            "message": message
+        }
+        
+        self.logs.append(log_entry)
+        
+        # Mantener solo los últimos logs
+        if len(self.logs) > self.max_logs:
+            self.logs.pop(0)
+        
+        # Imprimir siempre errores
+        if level == "ERROR":
+            print(f"WatchPoint [{timestamp}] {level}: {message}")
+        elif level == "WARNING":
+            print(f"WatchPoint [{timestamp}] {level}: {message}")
+    
+    def debug(self, message, component="WatchPoint"):
+        self.log("DEBUG", message, component)
+    
+    def info(self, message, component="WatchPoint"):
+        self.log("INFO", message, component)
+    
+    def warning(self, message, component="WatchPoint"):
+        self.log("WARNING", message, component)
+    
+    def error(self, message, component="WatchPoint"):
+        self.log("ERROR", message, component)
+    
+    def get_logs(self, level=None, component=None):
+        """Obtener logs filtrados por nivel y componente"""
+        filtered_logs = self.logs
+        
+        if level:
+            filtered_logs = [log for log in filtered_logs if log["level"] == level]
+        
+        if component:
+            filtered_logs = [log for log in filtered_logs if log["component"] == component]
+        
+        return filtered_logs
+    
+    def clear_logs(self):
+        """Limpiar todos los logs"""
+        self.logs = []
+    
+    def set_debug_mode(self, enabled=True):
+        """Activar/desactivar modo debug"""
+        self.debug_mode = enabled
+        if enabled:
+            self.debug_session_id = time.strftime("%Y%m%d_%H%M%S")
+            # Crear directorio de debug si no existe
+            os.makedirs(self.debug_log_dir, exist_ok=True)
+            self.info(f"Modo debug activado - Sesión: {self.debug_session_id}", "Debug")
+        else:
+            self.info("Modo debug desactivado", "Debug")
+        
+        # Guardar configuración persistente
+        self.save_debug_config()
+    
+    def load_debug_config(self):
+        """Cargar configuración de debug desde archivo"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.debug_mode = config.get('debug_mode', False)
+                    if self.debug_mode:
+                        self.debug_session_id = time.strftime("%Y%m%d_%H%M%S")
+                        self.info(f"Modo debug persistente activado - Sesión: {self.debug_session_id}", "Debug")
+        except Exception as e:
+            self.error(f"Error cargando config de debug: {e}", "Debug")
+    
+    def save_debug_config(self):
+        """Guardar configuración de debug a archivo"""
+        try:
+            config = {
+                'debug_mode': self.debug_mode,
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            self.error(f"Error guardando config de debug: {e}", "Debug")
+    
+    def save_debug_dump(self, watch_point_instance=None):
+        """Guardar dump completo de debug con stats, threads y logs"""
+        if not self.debug_mode:
+            return
+        
+        # Prevenir recursión infinita
+        if hasattr(self, '_saving_dump') and self._saving_dump:
+            return None
+        
+        try:
+            self._saving_dump = True
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = f"debug_dump_{self.debug_session_id}_{timestamp}.log"
+            filepath = os.path.join(self.debug_log_dir, filename)
+            
+            debug_data = {
+                "timestamp": timestamp,
+                "session_id": self.debug_session_id,
+                "system_info": {
+                    "python_version": sys.version,
+                    "platform": sys.platform,
+                    "threading_active": threading.active_count()
+                }
+            }
+            
+            # Agregar stats del WatchPoint si está disponible
+            if watch_point_instance and hasattr(watch_point_instance, 'get_health_stats'):
+                debug_data["health_stats"] = watch_point_instance.get_health_stats()
+            
+            # Agregar info de threads SI ESTÁ DISPONIBLE Y NO ESTAMOS EN RECURSIÓN
+            if watch_point_instance and hasattr(watch_point_instance, 'debug_threads'):
+                # Llamar directamente a la función sin pasar por el logger para evitar recursión
+                debug_data["thread_info"] = watch_point_instance.debug_threads()
+            
+            # Agregar logs recientes
+            debug_data["recent_logs"] = self.get_logs()[-50:]  # Últimos 50 logs
+            
+            # Guardar a archivo
+            with open(filepath, 'w', encoding='utf-8') as f:
+                import json
+                json.dump(debug_data, f, indent=2, default=str)
+            
+            self.info(f"Debug dump guardado: {filename}", "Debug")
+            return filepath
+            
+        except Exception as e:
+            self.error(f"Error guardando debug dump: {e}", "Debug")
+            return None
+        finally:
+            # Limpiar bandera de recursión
+            self._saving_dump = False
+
+# Crear logger global
+wp_logger = WatchPointLogger()
 
 try:
     import win32clipboard
@@ -77,7 +282,15 @@ class WindowManager:
             self.settings_manager = settings_manager or SettingsManager(
                 os.path.join(os.path.dirname(__file__), "watchpoint_settings.json")
             )
+            self.shutdown_event = threading.Event()
+            self._start_time = time.time()  # Tiempo de inicio para estadísticas
             self.initialized = True
+            
+            # Iniciar watchdog
+            self.watchdog_thread = Thread(target=self._watchdog_loop, daemon=True)
+            self.watchdog_thread.start()
+            
+            wp_logger.info("WindowManager inicializado", "WindowManager")
 
     def show_image(self, display_idx, pil_img, text=None):
         """Creates or updates a window to display an image and optional text."""
@@ -104,9 +317,25 @@ class WindowManager:
         thread.start()
 
     def hide_window(self, display_idx):
-        """Signals a window to close."""
+        """Signals a window to close with timeout garantizado."""
         if display_idx in self.windows:
             self.windows[display_idx]["running"] = False
+            self.windows[display_idx]["closing"] = True
+            self.windows[display_idx]["close_started"] = time.time()
+            
+            # MEJORADO: Esperar hasta 3 segundos con timeout
+            try:
+                thread = self.windows[display_idx].get("thread")
+                if thread and thread.is_alive():
+                    thread.join(timeout=3.0)
+                    wp_logger.debug(f"Thread {display_idx} finalizado correctamente", "HideWindow")
+            except Exception as e:
+                wp_logger.error(f"Error esperando thread {display_idx}: {e}", "HideWindow")
+            
+            # Forzar cleanup si sigue vivo
+            if display_idx in self.windows and self.windows[display_idx].get("thread", {}).is_alive():
+                wp_logger.warning(f"Forzando cleanup para ventana {display_idx}", "HideWindow")
+                self._force_cleanup_window(display_idx)
 
     def update_all_text(self, text):
         """Updates the text in all currently open windows."""
@@ -115,22 +344,93 @@ class WindowManager:
                 win_data["instance"].update_signal_text(text)
 
     def _window_loop(self, display_idx):
-        """The main loop for a Tkinter window thread."""
-        root = tk.Tk()
-        root.title(f"Watch Point - Monitor {display_idx}")
-        
-        self._apply_icon(root)
-        self._apply_geometry(root, display_idx)
-
-        win_instance = WatchPointWindow(root, display_idx, self)
-        self.windows[display_idx]["instance"] = win_instance
-        
+        """The main loop for a Tkinter window thread with robust error handling."""
+        root = None
+        win_instance = None
         try:
-            root.mainloop()
+            # === CÓDIGO EXISTENTE SE MANTIENE IGUAL ===
+            root = tk.Tk()
+            root.title(f"Watch Point - Monitor {display_idx}")
+            
+            self._apply_icon(root)
+            self._apply_geometry(root, display_idx)
+
+            win_instance = WatchPointWindow(root, display_idx, self)
+            self.windows[display_idx]["instance"] = win_instance
+            
+            # NUEVO: Agregar handler de cierre más robusto
+            def safe_close():
+                self.windows[display_idx]["running"] = False
+                self.windows[display_idx]["closing"] = True
+                try:
+                    root.quit()
+                except:
+                    pass
+            
+            root.protocol("WM_DELETE_WINDOW", safe_close)
+            # === FIN CÓDIGO EXISTENTE ===
+            
+            # MEJORADO: Mejor manejo de excepciones de mainloop
+            try:
+                root.mainloop()
+            except RuntimeError as e:
+                # RuntimeError común al cerrar: "main thread is not in main loop"
+                if "main thread" not in str(e):
+                    wp_logger.error(f"RuntimeError en mainloop: {e}", "WindowLoop")
+                    # Trigger debug dump en error crítico
+                    if wp_logger.debug_mode:
+                        wp_logger.save_debug_dump()
+                    raise
+                else:
+                    wp_logger.debug(f"RuntimeError esperado en mainloop: {e}", "WindowLoop")
+                    # Trigger debug dump en error de thread (Tcl_AsyncDelete)
+                    if wp_logger.debug_mode and ("Tcl_AsyncDelete" in str(e) or "async handler" in str(e)):
+                        wp_logger.save_debug_dump()
+            except Exception as e:
+                wp_logger.error(f"Error en mainloop de Tkinter: {e}", "WindowLoop")
+        
         except Exception as e:
-            print(f"Watch Point: Tkinter loop error: {e}")
+            wp_logger.error(f"Error en ventana {display_idx}: {e}", "WindowLoop")
+            # Trigger debug dump en error crítico de ventana
+            if wp_logger.debug_mode:
+                wp_logger.save_debug_dump()
+        
         finally:
-            self._cleanup_window(display_idx)
+            # MEJORADO: Cleanup con múltiples intentos y limpieza de Tkinter
+            # CRÍTICO: Solo el hilo principal puede tocar recursos Tkinter
+            import threading
+            current_thread = threading.current_thread()
+            
+            for attempt in range(3):
+                try:
+                    # PROTECCIÓN TCL: Solo limpiar Tkinter si estamos en el hilo principal
+                    if current_thread.name == "MainThread":
+                        # Limpiar recursos de Tkinter primero
+                        if win_instance:
+                            try:
+                                win_instance.cleanup_tkinter_resources()
+                            except Exception as e:
+                                wp_logger.warning(f"Error limpiando recursos Tkinter: {e}", "WindowLoop")
+                        
+                        if root:
+                            try:
+                                root.quit()
+                            except:
+                                pass
+                            try:
+                                root.destroy()
+                            except:
+                                pass
+                    else:
+                        # Si no estamos en el hilo principal, solo loggear y saltar Tkinter
+                        wp_logger.warning(f"Skipping Tkinter cleanup desde hilo {current_thread.name} - protección Tcl_AsyncDelete", "WindowLoop")
+                    
+                    self._cleanup_window(display_idx)
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        wp_logger.error(f"Cleanup falló después de 3 intentos: {e}", "WindowLoop")
+                    time.sleep(0.05)
 
     def _apply_icon(self, root):
         """Applies the icon from a file to the window."""
@@ -189,14 +489,114 @@ class WindowManager:
         return f"{default_w}x{default_h}"
 
     def _cleanup_window(self, display_idx):
-        """Ensures a window and its resources are properly removed."""
+        """Ensures a window and its resources are properly removed with múltiples intentos."""
         if display_idx in self.windows:
-            win_data = self.windows[display_idx]
-            if "thread" in win_data and win_data["thread"].is_alive():
+            import threading
+            current_thread = threading.current_thread()
+            
+            for attempt in range(3):
                 try:
-                    win_data["thread"].join(timeout=0.1)
-                except Exception: pass
-            del self.windows[display_idx]
+                    win_data = self.windows[display_idx]
+                    
+                    # PROTECCIÓN THREAD: Solo intentar join si el thread actual NO es el thread de la ventana
+                    if "thread" in win_data and win_data["thread"].is_alive():
+                        # Verificar que no estemos intentando hacer join a nosotros mismos
+                        if win_data["thread"] != current_thread:
+                            try:
+                                win_data["thread"].join(timeout=0.1)
+                            except Exception: 
+                                pass
+                        else:
+                            wp_logger.warning(f"Evitando auto-join en cleanup para ventana {display_idx}", "Cleanup")
+                    
+                    # Eliminar de la lista SIEMPRE, incluso si hay errores
+                    try:
+                        del self.windows[display_idx]
+                    except KeyError:
+                        # Ya fue eliminado, no es error
+                        pass
+                    
+                    wp_logger.debug(f"Cleanup exitoso para ventana {display_idx} (intento {attempt + 1})", "Cleanup")
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        wp_logger.error(f"Cleanup falló después de 3 intentos: {e}", "Cleanup")
+                    time.sleep(0.05)
+
+    def _watchdog_loop(self):
+        """Monitorea y limpia threads muertos cada segundo"""
+        wp_logger.info("Watchdog iniciado", "Watchdog")
+        
+        while not self.shutdown_event.is_set():
+            time.sleep(1.0)
+            
+            dead_windows = []
+            for display_idx, win_data in list(self.windows.items()):
+                # Detectar threads que murieron sin cleanup
+                if "thread" in win_data:
+                    if not win_data["thread"].is_alive():
+                        dead_windows.append(display_idx)
+                        wp_logger.warning(f"Thread muerto detectado para ventana {display_idx}", "Watchdog")
+                    # Detectar ventanas que llevan mucho tiempo cerrándose
+                    elif win_data.get("closing") and win_data.get("close_started"):
+                        if time.time() - win_data["close_started"] > 5.0:
+                            # Forzar cleanup después de 5 segundos
+                            dead_windows.append(display_idx)
+                            wp_logger.warning(f"Ventana {display_idx} tardando demasiado en cerrar", "Watchdog")
+            
+            # Limpiar ventanas muertas
+            for idx in dead_windows:
+                wp_logger.info(f"Limpiando ventana muerta {idx}", "Watchdog")
+                self._force_cleanup_window(idx)
+        
+        wp_logger.info("Watchdog finalizado", "Watchdog")
+
+    def _force_cleanup_window(self, display_idx):
+        """Cleanup forzado sin esperar al thread"""
+        if display_idx in self.windows:
+            try:
+                # No intentar join, solo eliminar
+                del self.windows[display_idx]
+                wp_logger.debug(f"Force cleanup exitoso para ventana {display_idx}", "Cleanup")
+            except Exception as e:
+                wp_logger.error(f"Error en force cleanup: {e}", "Cleanup")
+
+    def get_health_stats(self):
+        """Obtener estadísticas de salud del sistema"""
+        stats = {
+            "total_windows_created": len(self.windows),
+            "active_windows": len([w for w in self.windows.values() if w.get("running", False)]),
+            "closing_windows": len([w for w in self.windows.values() if w.get("closing", False)]),
+            "threads_alive": len([w for w in self.windows.values() if w.get("thread") and w["thread"].is_alive()]),
+            "watchdog_status": "running" if hasattr(self, 'watchdog_thread') and self.watchdog_thread.is_alive() else "stopped",
+            "shutdown_event": self.shutdown_event.is_set(),
+            "uptime": time.time() - getattr(self, '_start_time', time.time())
+        }
+        
+        # Agregar información de threads
+        import threading
+        stats["total_threads"] = threading.active_count()
+        
+        return stats
+        """Shutdown global del WindowManager sin usar atexit"""
+        wp_logger.info("Iniciando shutdown global...", "WindowManager")
+        self.shutdown_event.set()
+        
+        # Cerrar todas las ventanas activas
+        for display_idx in list(self.windows.keys()):
+            try:
+                self.hide_window(display_idx)
+            except Exception as e:
+                wp_logger.error(f"Error cerrando ventana {display_idx}: {e}", "WindowManager")
+        
+        # Esperar al watchdog
+        try:
+            if hasattr(self, 'watchdog_thread') and self.watchdog_thread.is_alive():
+                self.watchdog_thread.join(timeout=2.0)
+        except Exception as e:
+            wp_logger.error(f"Error esperando watchdog: {e}", "WindowManager")
+        
+        wp_logger.info("Shutdown completado", "WindowManager")
 
 # --- Main ComfyUI Node ---
 class WatchPoint:
@@ -204,6 +604,9 @@ class WatchPoint:
     def __init__(self):
         self.window_manager = WindowManager()
         self.last_display_idx = -1
+        
+        # Registrar en el registro global para cleanup
+        shutdown_registry.register(self)
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -235,18 +638,27 @@ class WatchPoint:
 
         # Close the previous window if the monitor has changed
         if self.last_display_idx != -1 and self.last_display_idx != display_idx:
+            wp_logger.info(f"Cambiando de monitor {self.last_display_idx} a {display_idx}", "WatchPoint")
             self.window_manager.hide_window(self.last_display_idx)
 
         self.last_display_idx = display_idx
 
         if monitor_preview:
+            wp_logger.debug(f"Mostrando preview en monitor {display_idx}", "WatchPoint")
             image = 255.0 * images[0].cpu().numpy()
             pil_img = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
             self.window_manager.show_image(display_idx, pil_img, opt_signal_text)
         else:
+            wp_logger.debug(f"Ocultando preview en monitor {display_idx}", "WatchPoint")
             self.window_manager.hide_window(display_idx)
 
         ui_images = self._prepare_preview(images) if floating_preview else []
+        
+        # NUEVO: Guardar dump automáticamente si debug está activado
+        if wp_logger.debug_mode:
+            wp_logger.info("Guardando dump automático - WatchPoint ejecutado", "WatchPoint")
+            wp_logger.save_debug_dump(self)
+        
         return {"ui": {"images": ui_images}, "result": (images,)}
 
     def _prepare_preview(self, images):
@@ -262,6 +674,93 @@ class WatchPoint:
             img.save(os.path.join(output_dir, filename), compress_level=4)
             results.append({"filename": filename, "subfolder": "", "type": "temp"})
         return results
+
+    def cleanup(self):
+        """Cleanup del nodo WatchPoint sin usar atexit"""
+        if hasattr(self, 'window_manager'):
+            self.window_manager.shutdown()
+    
+    def get_logs(self, level=None, component=None):
+        """Obtener logs del sistema de logging"""
+        return wp_logger.get_logs(level, component)
+    
+    def clear_logs(self):
+        """Limpiar todos los logs"""
+        wp_logger.clear_logs()
+        wp_logger.info("Logs limpiados", "WatchPoint")
+    
+    def set_debug_mode(self, enabled=True):
+        """Activar/desactivar modo debug"""
+        wp_logger.set_debug_mode(enabled)
+        if enabled:
+            wp_logger.info("Modo debug activado para WatchPoint", "WatchPoint")
+        else:
+            wp_logger.info("Modo debug desactivado para WatchPoint", "WatchPoint")
+    
+    def save_debug_dump(self):
+        """Guardar dump completo de debug"""
+        filepath = wp_logger.save_debug_dump(self)
+        if filepath:
+            wp_logger.info(f"Debug dump guardado en: {filepath}", "WatchPoint")
+        return filepath
+    
+    def get_health_stats(self):
+        """Obtener estadísticas de salud del sistema"""
+        return self.window_manager.get_health_stats()
+    
+    def debug_threads(self):
+        """Comando de debug para inspeccionar threads"""
+        import threading
+        
+        debug_info = {
+            "total_threads": threading.active_count(),
+            "threads": [],
+            "window_threads": [],
+            "daemon_threads": []
+        }
+        
+        # Inspeccionar todos los threads
+        for thread in threading.enumerate():
+            thread_info = {
+                "name": thread.name,
+                "ident": thread.ident,
+                "is_alive": thread.is_alive(),
+                "is_daemon": thread.daemon,
+                "thread_type": type(thread).__name__
+            }
+            
+            debug_info["threads"].append(thread_info)
+            
+            if thread.daemon:
+                debug_info["daemon_threads"].append(thread_info)
+        
+        # Inspeccionar threads de ventanas
+        if hasattr(self, 'window_manager') and hasattr(self.window_manager, 'windows'):
+            for window_id, window_data in self.window_manager.windows.items():
+                if window_data.get('thread'):
+                    thread = window_data['thread']
+                    window_thread_info = {
+                        "window_id": window_id,
+                        "thread_name": thread.name,
+                        "thread_ident": thread.ident,
+                        "is_alive": thread.is_alive(),
+                        "running": window_data.get('running', False),
+                        "closing": window_data.get('closing', False)
+                    }
+                    debug_info["window_threads"].append(window_thread_info)
+        
+        # Agregar información del watchdog
+        if hasattr(self.window_manager, 'watchdog_thread'):
+            watchdog = self.window_manager.watchdog_thread
+            debug_info["watchdog"] = {
+                "name": watchdog.name,
+                "ident": watchdog.ident,
+                "is_alive": watchdog.is_alive(),
+                "is_daemon": watchdog.daemon
+            }
+        
+        wp_logger.info(f"Debug threads ejecutado: {debug_info['total_threads']} threads activos", "WatchPoint")
+        return debug_info
 
 # --- Tkinter UI Classes ---
 class WatchPointWindow:
@@ -286,6 +785,43 @@ class WatchPointWindow:
         self._bind_events()
         self._set_initial_state()
         self._update_image_loop()
+
+    def cleanup_tkinter_resources(self):
+        """Limpieza segura de recursos de Tkinter para prevenir errores de destrucción"""
+        # PROTECCIÓN TCL: Solo ejecutar en el hilo principal
+        import threading
+        current_thread = threading.current_thread()
+        
+        if current_thread.name != "MainThread":
+            wp_logger.warning(f"Skipping cleanup_tkinter_resources desde hilo {current_thread.name} - protección Tcl_AsyncDelete", "WatchPointWindow")
+            return
+        
+        try:
+            # Limpiar variables de Tkinter
+            if hasattr(self, 'size_var'):
+                try:
+                    self.size_var.set('')  # Limpiar valor antes de destruir
+                except:
+                    pass
+                self.size_var = None
+            
+            # Limpiar imágenes
+            if hasattr(self, 'photo_image') and self.photo_image:
+                try:
+                    self.photo_image = None
+                except:
+                    pass
+            
+            # Limpiar referencias a widgets
+            if hasattr(self, 'canvas') and self.canvas:
+                try:
+                    self.canvas.delete("all")
+                except:
+                    pass
+            
+            wp_logger.debug(f"Recursos de Tkinter limpiados para ventana {self.display_idx}", "WatchPointWindow")
+        except Exception as e:
+            wp_logger.warning(f"Error limpiando recursos de Tkinter: {e}", "WatchPointWindow")
 
     def _create_ui(self):
         # Drawer (Signal Scout)
@@ -552,7 +1088,113 @@ class WPSignalScout:
             WindowManager().update_all_text(text)
         except Exception as e:
             print(f"WP_Scout Error: Could not connect to Watch Point window: {e}")
-        return (text,)
+
+# --- Función de Shutdown Global ---
+def cleanup_all_watchpoints():
+    """Función para limpiar todos los nodos WatchPoint sin usar atexit"""
+    shutdown_registry.shutdown_all()
+
+# Agregar la función al módulo para que esté disponible
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "cleanup_all_watchpoints"]
 
 NODE_CLASS_MAPPINGS["WPSignalScout"] = WPSignalScout
 NODE_DISPLAY_NAME_MAPPINGS["WPSignalScout"] = "📡 WP Signal Scout"
+
+# --- Debug Node ---
+class WatchPointDebug:
+    """Nodo de debug para WatchPoint - Controla modo debug y captura dumps"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "action": (["enable_debug", "disable_debug", "save_dump", "get_stats", "get_threads"],),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "execute_debug_action"
+    CATEGORY = "WatchPoint"
+    
+    def execute_debug_action(self, action):
+        """Ejecutar acción de debug y retornar resultado"""
+        
+        if action == "enable_debug":
+            wp_logger.set_debug_mode(True)
+            return ("✅ Modo debug activado",)
+            
+        elif action == "disable_debug":
+            wp_logger.set_debug_mode(False)
+            return ("⚪ Modo debug desactivado",)
+            
+        elif action == "save_dump":
+            # Buscar una instancia WatchPoint activa
+            watchpoint_instance = self._find_watchpoint_instance()
+            filepath = wp_logger.save_debug_dump(watchpoint_instance)
+            if filepath:
+                return (f"💾 Debug dump guardado: {os.path.basename(filepath)}",)
+            else:
+                return ("❌ Error al guardar debug dump (modo debug desactivado?)",)
+                
+        elif action == "get_stats":
+            watchpoint_instance = self._find_watchpoint_instance()
+            if watchpoint_instance and hasattr(watchpoint_instance, 'get_health_stats'):
+                stats = watchpoint_instance.get_health_stats()
+                stats_text = json.dumps(stats, indent=2, default=str)
+                return (f"📊 Estadísticas:\n{stats_text}",)
+            else:
+                return ("ℹ️ No hay instancia WatchPoint activa encontrada",)
+                
+        elif action == "get_threads":
+            watchpoint_instance = self._find_watchpoint_instance()
+            if watchpoint_instance and hasattr(watchpoint_instance, 'debug_threads'):
+                threads = watchpoint_instance.debug_threads()
+                threads_text = json.dumps(threads, indent=2, default=str)
+                return (f"🧵 Información de threads:\n{threads_text}",)
+            else:
+                return ("ℹ️ No hay instancia WatchPoint activa encontrada",)
+        
+        return ("❌ Acción no reconocida",)
+    
+    def _find_watchpoint_instance(self):
+        """Buscar una instancia WatchPoint activa en el registro global"""
+        try:
+            for node in shutdown_registry._nodes:
+                if isinstance(node, WatchPoint):
+                    return node
+        except Exception:
+            pass
+        return None
+
+# Agregar el nodo de debug a los mappings
+NODE_CLASS_MAPPINGS["WatchPointDebug"] = WatchPointDebug
+NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebug"] = "🔧 WatchPoint Debug"
+
+# --- Simple Debug Toggle Node ---
+class WatchPointDebugToggle:
+    """Nodo simple para activar/desactivar debug persistente - ¡Solo un click!"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "debug_activado": ("BOOLEAN", {"default": False}),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "toggle_debug"
+    CATEGORY = "WatchPoint"
+    
+    def toggle_debug(self, debug_activado):
+        """Activar/desactivar debug persistente"""
+        wp_logger.set_debug_mode(debug_activado)
+        
+        if debug_activado:
+            return ("✅ Debug persistente ACTIVADO\n💾 Se guardarán dumps automáticamente en cada ejecución",)
+        else:
+            return ("⚪ Debug persistente DESACTIVADO\n📝 Los dumps se guardarán manualmente",)
+
+# Agregar el nodo simple de toggle
+NODE_CLASS_MAPPINGS["WatchPointDebugToggle"] = WatchPointDebugToggle
+NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebugToggle"] = "🔨 WatchPoint Debug Toggle"
