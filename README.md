@@ -55,6 +55,23 @@ A debug node to send text to the Monitor Preview window.
 2. Connect any `STRING` input.
 3. The text will appear in the side panel of the external window.
 
+### 🔧 Utility Nodes (Optional)
+These nodes provide additional functionality and can be enabled/disabled via configuration.
+
+#### 🐛 WatchPoint Debug Toggle
+A simple node to enable/disable persistent debug mode for WatchPoint nodes.
+- **Function**: Toggle debug mode with a single click
+- **Location**: `WatchPoint/Utils` (when enabled)
+- **Usage**: Connect to any workflow to activate debug logging
+
+#### 🪟 WatchPoint Restore Window
+A utility node to restore minimized WatchPoint windows.
+- **Function**: Recover hidden/minimized windows
+- **Location**: `WatchPoint/Utils` (when enabled)
+- **Usage**: Add to workflow when windows need restoration
+
+**Note**: Utility nodes are loaded optionally. To enable/disable them, modify the `__init__.py` file.
+
 ### Example Workflow
 ```
 [Primitive] → [WP Signal Scout]
@@ -112,6 +129,27 @@ Access settings via the **⚙ Settings** button in the toolbar.
 - Show/hide toolbar by default
 
 All settings are saved to `watchpoint_settings.json`
+
+## Utility Nodes Configuration
+
+Utility nodes (WatchPoint Debug Toggle and WatchPoint Restore Window) are optional and can be enabled/disabled:
+
+### Enabling Utility Nodes
+1. Open `__init__.py` in the ComfyUI-WatchPoint folder
+2. Ensure the import block is uncommented:
+```python
+try:
+    from .nodes.watchpoint_utils import NODE_CLASS_MAPPINGS as UTILS_CLASS, NODE_DISPLAY_NAME_MAPPINGS as UTILS_DISPLAY
+    NODE_CLASS_MAPPINGS.update(UTILS_CLASS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(UTILS_DISPLAY)
+    print("WatchPoint Utils loaded: Debug Toggle and Restore Window available")
+except ImportError as e:
+    print(f"WatchPoint Utils not available: {e}")
+    pass
+```
+
+### Disabling Utility Nodes
+Comment out or remove the import block in `__init__.py` to disable utility nodes.
 
 ## Configuration File
 

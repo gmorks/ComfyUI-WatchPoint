@@ -308,7 +308,8 @@ class WindowManager:
         lock = Lock()
         win_data = {
             "image": pil_img, "lock": lock, "running": True,
-            "instance": None, "pending_text": text
+            "instance": None, "pending_text": text,
+            "minimized": False  # NUEVO: Estado de minimización
         }
         self.windows[display_idx] = win_data
         
@@ -358,14 +359,24 @@ class WindowManager:
             win_instance = WatchPointWindow(root, display_idx, self)
             self.windows[display_idx]["instance"] = win_instance
             
-            # NUEVO: Agregar handler de cierre más robusto
+            # NUEVO: Handler de cierre que minimiza en lugar de cerrar - ¡Protección anti-cierre accidental!
             def safe_close():
-                self.windows[display_idx]["running"] = False
-                self.windows[display_idx]["closing"] = True
+                # En lugar de cerrar, ¡MINIMIZAMOS la ventana a la barra de tareas!
                 try:
-                    root.quit()
-                except:
-                    pass
+                    root.iconify()  # Minimizar a barra de tareas
+                    # Actualizar estado: la ventana sigue viva pero minimizada
+                    self.windows[display_idx]["minimized"] = True
+                    self.windows[display_idx]["running"] = True  # Sigue ejecutándose
+                    wp_logger.info(f"Ventana {display_idx} minimizada (protegida de cierre accidental)", "WindowLoop")
+                except Exception as e:
+                    wp_logger.warning(f"Error minimizando ventana {display_idx}: {e}", "WindowLoop")
+                    # Fallback: si no puede minimizar, intentar ocultar
+                    try:
+                        root.withdraw()
+                        self.windows[display_idx]["minimized"] = True
+                        wp_logger.info(f"Ventana {display_idx} oculta como fallback", "WindowLoop")
+                    except:
+                        pass
             
             root.protocol("WM_DELETE_WINDOW", safe_close)
             # === FIN CÓDIGO EXISTENTE ===
@@ -431,6 +442,40 @@ class WindowManager:
                     if attempt == 2:
                         wp_logger.error(f"Cleanup falló después de 3 intentos: {e}", "WindowLoop")
                     time.sleep(0.05)
+
+    def restore_window(self, display_idx):
+        """Restaura una ventana minimizada - ¡Para recuperarla desde la barra de tareas!"""
+        if display_idx in self.windows:
+            win_data = self.windows[display_idx]
+            
+            # Verificar si está minimizada
+            if not win_data.get("minimized", False):
+                wp_logger.debug(f"Ventana {display_idx} no está minimizada", "RestoreWindow")
+                return False
+            
+            instance = win_data.get("instance")
+            if not instance:
+                wp_logger.warning(f"No se puede restaurar ventana {display_idx}: instancia no válida", "RestoreWindow")
+                return False
+            
+            try:
+                # Restaurar la ventana usando el root de la instancia
+                if hasattr(instance, 'root') and instance.root:
+                    instance.root.deiconify()  # Hacer visible de nuevo
+                    instance.root.lift()  # Traer al frente
+                    instance.root.focus_force()  # Dar foco
+                    
+                    # Actualizar estado
+                    win_data["minimized"] = False
+                    wp_logger.info(f"Ventana {display_idx} restaurada exitosamente", "RestoreWindow")
+                return True
+                
+            except Exception as e:
+                wp_logger.error(f"Error restaurando ventana {display_idx}: {e}", "RestoreWindow")
+                return False
+        else:
+            wp_logger.warning(f"Ventana {display_idx} no existe", "RestoreWindow")
+            return False
 
     def _apply_icon(self, root):
         """Applies the icon from a file to the window."""
@@ -598,11 +643,15 @@ class WindowManager:
         
         wp_logger.info("Shutdown completado", "WindowManager")
 
+# --- Global Window Manager Instance ---
+# Instancia global para que los nodos puedan acceder al WindowManager
+window_manager = WindowManager()
+
 # --- Main ComfyUI Node ---
 class WatchPoint:
     """The main ComfyUI node class."""
     def __init__(self):
-        self.window_manager = WindowManager()
+        self.window_manager = window_manager  # Usar la instancia global
         self.last_display_idx = -1
         
         # Registrar en el registro global para cleanup
@@ -1168,33 +1217,4 @@ class WatchPointDebug:
 
 # Agregar el nodo de debug a los mappings
 NODE_CLASS_MAPPINGS["WatchPointDebug"] = WatchPointDebug
-NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebug"] = "🔧 WatchPoint Debug"
-
-# --- Simple Debug Toggle Node ---
-class WatchPointDebugToggle:
-    """Nodo simple para activar/desactivar debug persistente - ¡Solo un click!"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "debug_activado": ("BOOLEAN", {"default": False}),
-            }
-        }
-    
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "toggle_debug"
-    CATEGORY = "WatchPoint"
-    
-    def toggle_debug(self, debug_activado):
-        """Activar/desactivar debug persistente"""
-        wp_logger.set_debug_mode(debug_activado)
-        
-        if debug_activado:
-            return ("✅ Debug persistente ACTIVADO\n💾 Se guardarán dumps automáticamente en cada ejecución",)
-        else:
-            return ("⚪ Debug persistente DESACTIVADO\n📝 Los dumps se guardarán manualmente",)
-
-# Agregar el nodo simple de toggle
-NODE_CLASS_MAPPINGS["WatchPointDebugToggle"] = WatchPointDebugToggle
-NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebugToggle"] = "🔨 WatchPoint Debug Toggle"
+NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebug"] = "🔧 Watch Point Debug"
