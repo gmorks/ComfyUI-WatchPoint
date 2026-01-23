@@ -6,6 +6,14 @@ from PIL import Image, ImageTk
 import numpy as np
 from threading import Thread, Lock
 import folder_paths
+import io
+
+try:
+    import win32clipboard
+    import win32con
+    WIN32_AVAILABLE = True
+except ImportError:
+    WIN32_AVAILABLE = False
 
 
 try:
@@ -284,10 +292,10 @@ class WatchPointWindow:
         self.drawer_frame = tk.Frame(self.root, bg="#1c1c1c", width=300)
         self.drawer_frame.pack(side="right", fill="y")
         self.drawer_frame.pack_propagate(False)
-        tk.Label(self.drawer_frame, text="📡 SIGNAL SCOUT", bg="#1c1c1c", fg="#666", font=("Arial", 8, "bold"), pady=5).pack(fill="x")
+        tk.Label(self.drawer_frame, text="PROMPT", bg="#1c1c1c", fg="#666", font=("Arial", 8, "bold"), pady=5).pack(fill="x")
         self.signal_text = tk.Text(self.drawer_frame, bg="#1c1c1c", fg="#00ff99", insertbackground="white", font=("Consolas", 10), wrap="word", padx=10, pady=10, borderwidth=0, highlightthickness=0)
         self.signal_text.pack(fill="both", expand=True)
-        self.signal_text.insert("1.0", "Waiting for signal...")
+        self.signal_text.insert("1.0", "Waiting for prompt...")
         self.signal_text.config(state="disabled")
 
         # Main Area
@@ -321,8 +329,30 @@ class WatchPointWindow:
     def _create_context_menu(self):
         self.context_menu = tk.Menu(self.root, tearoff=0)
         self.context_menu.add_command(label="Save Image As...", command=self._save_image)
+        if WIN32_AVAILABLE:
+            self.context_menu.add_command(label="Copy Image to Clipboard", command=self._copy_to_clipboard)
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Toggle Drawer", command=self._toggle_drawer)
+
+    def _copy_to_clipboard(self):
+        """Copies the current image to the system clipboard."""
+        if not self.current_pil_image or not WIN32_AVAILABLE:
+            return
+
+        try:
+            output = io.BytesIO()
+            # Convert to RGB for BMP format, as RGBA might not be supported.
+            self.current_pil_image.convert("RGB").save(output, "BMP")
+            data = output.getvalue()[14:]  # The BMP header is 14 bytes
+            output.close()
+
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32con.CF_DIB, data)
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            # This will silently fail, as requested.
+            print(f"Watch Point: Could not copy to clipboard. Error: {e}")
 
     def _bind_events(self):
         self.canvas.bind("<ButtonPress-1>", self._on_mouse_down)
