@@ -1,6 +1,9 @@
 ![Watch Point Banner](media/banner.png)
+
 # 👁️ ComfyUI Watch Point
+
 ![node preview](media/preview.png)
+
 **Dual preview system for ComfyUI workflows**
 
 ### About This Project
