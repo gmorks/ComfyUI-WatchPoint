@@ -28,9 +28,9 @@ debug_logs/
 *.tmp
 *.temp
 
-# Settings personales (opcional)
+# Personal settings
 watchpoint_debug_config.json
 
-# State files (no subir el JSON con datos)
+# Files not yet ready to be uploaded
 beta/
 
