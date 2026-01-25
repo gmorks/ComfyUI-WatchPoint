@@ -14,6 +14,10 @@ Watch Point provides two simultaneous preview methods:
 
 ---
 
+![node preview](example/example_workflow.png)
+
+---
+
 ## 🔧 Features
 
 ### Monitor Preview (Tkinter)
