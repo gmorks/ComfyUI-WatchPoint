@@ -16,12 +16,12 @@ class WPSignalScout:
     CATEGORY = "WatchPoint/Debug" 
 
     def scout_signal(self, text): 
-        # Intentamos importar WatchPoint desde el archivo raíz 
+        # Try to import WatchPoint from root file 
         try : 
             from ..watch_point import  WatchPoint 
             WatchPoint.update_all_text(text) 
         except Exception as  e: 
-            print(f"WP_Scout Error: No se pudo conectar con la ventana: {e}" ) 
+            print(f"WP_Scout Error: Could not connect to window: {e}" ) 
             
         return  (text,) 
 

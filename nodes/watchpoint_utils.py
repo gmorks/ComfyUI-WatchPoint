@@ -2,8 +2,6 @@ import json
 import os
 from server import PromptServer
 from aiohttp import web
-
-# Importar el logger global de watch_point
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -17,7 +15,7 @@ DEBUG = True
 
 # --- WatchPoint Debug Toggle Node ---
 class WatchPointDebugToggle:
-    """Nodo simple para activar/desactivar debug persistente - ¡Solo un click!"""
+    """Simple node to enable/disable persistent debug mode - One click!"""
     
     @classmethod
     def INPUT_TYPES(cls):
@@ -35,13 +33,13 @@ class WatchPointDebugToggle:
         if wp_logger:
             wp_logger.set_debug_mode(debug_activado)
         if debug_activado:
-            return ("✅ Debug persistente ACTIVADO\n💾 Se guardarán dumps automáticamente en cada ejecución",)
+            return ("✅ Persistent Debug ACTIVATED\n💾 Dumps will be saved automatically on each execution",)
         else:
-            return ("⚪ Debug persistente DESACTIVADO\n📝 Los dumps se guardarán manualmente",)
+            return ("⚪ Persistent Debug DEACTIVATED\n📝 Dumps will be saved manually",)
 
 # --- WatchPoint Restore Window Node ---
 class WatchPointRestoreWindow:
-    """Nodo para restaurar ventanas minimizadas - ¡Recupera tus ventanas escondidas!"""
+    """Node to restore minimized windows - Recover your hidden windows!"""
     
     @classmethod
     def INPUT_TYPES(cls):
@@ -59,11 +57,11 @@ class WatchPointRestoreWindow:
         if window_manager and hasattr(window_manager, 'restore_window'):
             success = window_manager.restore_window(display_idx)
             if success:
-                return (f"✅ Ventana {display_idx} restaurada exitosamente\n🪟 La ventana volvió a la vida!",)
+                return (f"✅ Window {display_idx} restored successfully\n🪟 Window came back to life!",)
             else:
-                return (f"❌ No se pudo restaurar ventana {display_idx}\n📝 Verifica que exista y esté minimizada",)
+                return (f"❌ Could not restore window {display_idx}\n📝 Check that it exists and is minimized",)
         else:
-            return (f"⚠️ WindowManager no disponible\n📝 No se puede restaurar la ventana",)
+            return (f"⚠️ WindowManager not available\n📝 Cannot restore window",)
 
 NODE_CLASS_MAPPINGS = {
     "WatchPointDebugToggle": WatchPointDebugToggle,
