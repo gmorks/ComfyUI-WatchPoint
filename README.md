@@ -1,5 +1,5 @@
 # 👁️ ComfyUI Watch Point
-
+![alt text](media/preview.png)
 **Dual preview system for ComfyUI workflows**
 
 Watch Point provides two simultaneous preview methods:
@@ -16,20 +16,40 @@ Watch Point provides two simultaneous preview methods:
 - 📋 Copy to clipboard
 - ⚙️ Customizable settings
 - 📡 **Signal Scout Panel**: Display text from your workflow in a side panel.
+- 🔒 **Thread Safety**: Windows minimize instead of closing to prevent ComfyUI crashes
 
 ### Floating Preview (JavaScript)
 - 📌 Uses ComfyUI's native preview system
 - 🎨 Works with existing preview extensions
 - 🔄 Auto-updates during workflow execution
+- 💾 Configurable via browser localStorage (no file editing)
+- ⌨️ Customizable keyboard shortcuts
+- 🎯 Snap-to-grid positioning
+- 👻 Adjustable opacity levels
+
+## Thread Safety & Window Protection
+
+WatchPoint includes built-in protection against threading issues that can crash ComfyUI:
+
+### 🛡️ Window Minimization Protection
+- **Close Button Behavior**: Clicking the Windows close button minimizes the window instead of closing it
+- **Thread Safety**: Prevents `Tcl_AsyncDelete` errors and threading conflicts
+- **ComfyUI Stability**: Ensures ComfyUI continues running even if windows are "minimized"
+- **Window Recovery**: Minimized windows can be restored from the taskbar
+
+### 🔧 Technical Details
+- Uses thread-safe Tkinter operations
+- Implements proper cleanup procedures
+- Prevents memory leaks and threading deadlocks
+- Global window management for consistent behavior
 
 ## Installation
 
 1. Clone into your ComfyUI custom_nodes directory:
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/yourusername/ComfyUI-WatchPoint.git
+git clone https://github.com/gmorks/ComfyUI-WatchPoint.git
 ```
-
 2. Install dependencies (if needed):
 ```bash
 pip install pillow screeninfo
@@ -96,6 +116,12 @@ A utility node to restore minimized WatchPoint windows.
 - **1**: Zoom 1:1 (100% actual size)
 - **ESC**: Close window
 
+### Window Close Behavior
+**Important**: The Windows close button (❌) minimizes the window instead of closing it. This prevents threading errors and keeps ComfyUI stable. To "close" the window:
+- Click the close button → Window minimizes to taskbar
+- Use **ESC** key to properly close the window
+- Right-click taskbar icon → "Close window" for forced closure
+
 ### Toolbar Buttons
 - **↻ Reset**: Reset zoom and pan
 - **⊕ Zoom In**: Increase zoom level
@@ -151,9 +177,10 @@ except ImportError as e:
 ### Disabling Utility Nodes
 Comment out or remove the import block in `__init__.py` to disable utility nodes.
 
-## Configuration File
+## Configuration Files
 
-Edit `watchpoint_settings.json` to customize defaults:
+### Monitor Preview Settings
+Edit `watchpoint_settings.json` to customize defaults for the external Tkinter window:
 
 ```json
 {
@@ -168,12 +195,148 @@ Edit `watchpoint_settings.json` to customize defaults:
 }
 ```
 
-### Settings Explained
+#### Settings Explained
 - `window_x`, `window_y`: Window position (null = auto)
 - `window_size_mode`: "fixed", "Half Vertical", "Half Horizontal", or "Quarter"
 - `show_toolbar`: Show toolbar on startup
 - `save_format`: Default save format ("png", "jpeg", "webp")
 - `jpeg_quality`: JPEG compression quality (10-100)
+
+### Floating Preview Configuration
+The floating preview window is configured via browser localStorage. No file editing required!
+
+#### Quick Start
+
+**View Current Configuration**
+
+Open browser console (F12) and run:
+```javascript
+WatchPointFloating.getConfig()
+```
+
+**Change Configuration**
+```javascript
+WatchPointFloating.setConfig({
+    window: {
+        defaultWidth: 500,
+        defaultHeight: 500,
+        defaultPosition: "top-right",
+        defaultOpacity: 80
+    },
+    shortcuts: {
+        toggle: "Ctrl+Alt+KeyP"  // Change toggle shortcut
+    }
+})
+```
+
+**Reset to Defaults**
+```javascript
+WatchPointFloating.resetConfig()
+```
+
+**Show Help**
+```javascript
+WatchPointFloating.showHelp()
+```
+
+**Note**: Reload the page after changing config to apply changes.
+
+#### Available Configuration Options
+
+##### Window Settings
+```javascript
+{
+    window: {
+        defaultWidth: 320,           // Width in pixels
+        defaultHeight: 320,          // Height in pixels
+        defaultPosition: "middle-right", // Initial position
+        defaultOpacity: 100          // 0-100 (percentage)
+    }
+}
+```
+
+**Available Positions**:
+- `"top-left"`, `"top-center"`, `"top-right"`
+- `"middle-left"`, `"middle-center"`, `"middle-right"`
+- `"bottom-left"`, `"bottom-center"`, `"bottom-right"`
+
+##### Opacity Settings
+```javascript
+{
+    opacity: {
+        levels: [20, 40, 60, 80, 100],  // Available opacity levels (%)
+        showIndicator: true,             // Show opacity % when changing
+        indicatorDuration: 1000          // How long indicator shows (ms)
+    }
+}
+```
+
+##### UI Settings
+```javascript
+{
+    ui: {
+        showHeader: true,          // Show title bar
+        showTitle: true,           // Show "👁️ Watch Point" title
+        showCloseButton: true,     // Show X button
+        dragFromAnywhere: false    // Drag from image area (only if header=false)
+    }
+}
+```
+
+##### Keyboard Shortcuts
+```javascript
+{
+    shortcuts: {
+        // Main controls
+        toggle: "Ctrl+Alt+KeyW",
+        increaseOpacity: "Ctrl+Alt+Equal",    // or Ctrl+Alt++
+        decreaseOpacity: "Ctrl+Alt+Minus",    // or Ctrl+Alt+-
+        
+        // Arrow navigation (relative)
+        snapUp: "Ctrl+Alt+ArrowUp",
+        snapDown: "Ctrl+Alt+ArrowDown",
+        snapLeft: "Ctrl+Alt+ArrowLeft",
+        snapRight: "Ctrl+Alt+ArrowRight",
+        
+        // Numpad navigation (absolute positions)
+        snapToPosition7: "Ctrl+Alt+Numpad7",  // Top-left
+        snapToPosition8: "Ctrl+Alt+Numpad8",  // Top-center
+        snapToPosition9: "Ctrl+Alt+Numpad9",  // Top-right
+        snapToPosition4: "Ctrl+Alt+Numpad4",  // Middle-left
+        snapToPosition5: "Ctrl+Alt+Numpad5",  // Middle-center
+        snapToPosition6: "Ctrl+Alt+Numpad6",  // Middle-right
+        snapToPosition1: "Ctrl+Alt+Numpad1",  // Bottom-left
+        snapToPosition2: "Ctrl+Alt+Numpad2",  // Bottom-center
+        snapToPosition3: "Ctrl+Alt+Numpad3"   // Bottom-right
+    }
+}
+```
+
+#### Default Keyboard Shortcuts
+
+| Action | Shortcut | Description |
+|--------|----------|-------------|
+| **Toggle window** | `Ctrl+Alt+W` | Show/hide floating preview |
+| **Increase opacity** | `Ctrl+Alt++` | Make more opaque |
+| **Decrease opacity** | `Ctrl+Alt+-` | Make more transparent |
+| **Move up** | `Ctrl+Alt+↑` | Snap to position above |
+| **Move down** | `Ctrl+Alt+↓` | Snap to position below |
+| **Move left** | `Ctrl+Alt+←` | Snap to position left |
+| **Move right** | `Ctrl+Alt+→` | Snap to position right |
+| **Snap to corner** | `Ctrl+Alt+Numpad[1-9]` | Jump to specific position |
+
+#### Storage Location
+
+Configuration is stored in browser localStorage under the key:
+```
+watchpoint-floating-config
+```
+
+This means:
+- ✅ Configuration persists between sessions
+- ✅ Each browser/profile has independent settings
+- ✅ No server-side storage needed
+- ⚠️ Clearing browser data will reset to defaults
 
 ## Use Cases
 
@@ -232,8 +395,22 @@ pip install pywin32
 
 ## Credits
 
-Created for ComfyUI by [Your Name]
+Vibe Coded for ComfyUI by gmorks using AI.
 
 ## License
 
 MIT License - Feel free to use and modify!
+
+## 🚧 Development Status
+
+**Note**: This extension is not yet compatible with ComfyUI Nodes 2.0. Support for the new node system is on our to-do list and will be implemented in a future update.
+
+Stay tuned for updates!
+
+## Recent Changes
+
+### v1.0.0 - Initial Release
+- Dual preview system (Monitor + Floating)
+- Signal Scout text display
+- Basic window controls and settings
+- Multi-monitor support

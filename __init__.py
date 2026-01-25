@@ -1,9 +1,8 @@
 from .watch_point import NODE_CLASS_MAPPINGS as WP_CLASS, NODE_DISPLAY_NAME_MAPPINGS as WP_DISPLAY, cleanup_all_watchpoints
-from .nodes.list_cycler import NODE_CLASS_MAPPINGS as LC_CLASS, NODE_DISPLAY_NAME_MAPPINGS as LC_DISPLAY
 
 # Combinamos lo básico
-NODE_CLASS_MAPPINGS = {**WP_CLASS, **LC_CLASS}
-NODE_DISPLAY_NAME_MAPPINGS = {**WP_DISPLAY, **LC_DISPLAY}
+NODE_CLASS_MAPPINGS = {**WP_CLASS}
+NODE_DISPLAY_NAME_MAPPINGS = {**WP_DISPLAY}
 
 # Importar nodos utils de forma opcional (pueden ser desactivados si no se necesitan)
 try:

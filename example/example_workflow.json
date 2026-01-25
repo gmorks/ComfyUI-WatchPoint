@@ -1,0 +1,199 @@
+{
+  "id": "d744fb0e-f3c7-4705-9960-73b30103a194",
+  "revision": 0,
+  "last_node_id": 6,
+  "last_link_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        17300,
+        -9670
+      ],
+      "size": [
+        222.83333587646484,
+        314
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PrimitiveString",
+      "pos": [
+        17100,
+        -9270
+      ],
+      "size": [
+        500,
+        58
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0",
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        "\"opt_signal_text\" can be used to send any string, to the tkinter window"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "WatchPoint",
+      "pos": [
+        17600,
+        -9670
+      ],
+      "size": [
+        210,
+        338
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "opt_signal_text",
+          "shape": 7,
+          "type": "STRING",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "gmorks/ComfyUI-WatchPoint",
+        "ver": "9c383314405e0767edb67ac208b87b4bac7a2448",
+        "Node name for S&R": "WatchPoint"
+      },
+      "widgets_values": [
+        true,
+        true,
+        "Monitor 0 (1920x1080)"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "PreviewImage",
+      "pos": [
+        17900,
+        -9670
+      ],
+      "size": [
+        140,
+        246
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [
+      4,
+      1,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      5,
+      4,
+      0,
+      5,
+      1,
+      "STRING"
+    ],
+    [
+      7,
+      5,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.725,
+      "offset": [
+        -16829.321120689645,
+        9914.394612068972
+      ]
+    },
+    "frontendVersion": "1.37.11",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

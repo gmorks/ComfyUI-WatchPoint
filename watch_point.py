@@ -1,6 +1,6 @@
 import os
 import json
-import sys  # NUEVO: Importar sys para debug dumps
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
@@ -55,11 +55,11 @@ class WatchPointLogger:
         self.log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR
         self.logs = []
         self.max_logs = 100
-        self.debug_mode = False  # NUEVO: Modo debug
-        self.debug_log_dir = "debug_logs"  # NUEVO: Directorio para logs de debug
-        self.debug_session_id = None  # NUEVO: ID única para sesión de debug
+        self.debug_mode = False
+        self.debug_log_dir = "debug_logs"
+        self.debug_session_id = None
         self.config_file = os.path.join(os.path.dirname(__file__), "watchpoint_debug_config.json")
-        self.load_debug_config()  # Cargar configuración persistente
+        self.load_debug_config()
     
     def log(self, level, message, component="WatchPoint"):
         """Log un mensaje con nivel y componente"""
@@ -124,13 +124,13 @@ class WatchPointLogger:
         self.debug_mode = enabled
         if enabled:
             self.debug_session_id = time.strftime("%Y%m%d_%H%M%S")
-            # Crear directorio de debug si no existe
+            
             os.makedirs(self.debug_log_dir, exist_ok=True)
             self.info(f"Modo debug activado - Sesión: {self.debug_session_id}", "Debug")
         else:
             self.info("Modo debug desactivado", "Debug")
         
-        # Guardar configuración persistente
+        
         self.save_debug_config()
     
     def load_debug_config(self):
@@ -183,16 +183,16 @@ class WatchPointLogger:
                 }
             }
             
-            # Agregar stats del WatchPoint si está disponible
+            
             if watch_point_instance and hasattr(watch_point_instance, 'get_health_stats'):
                 debug_data["health_stats"] = watch_point_instance.get_health_stats()
             
-            # Agregar info de threads SI ESTÁ DISPONIBLE Y NO ESTAMOS EN RECURSIÓN
+            
             if watch_point_instance and hasattr(watch_point_instance, 'debug_threads'):
                 # Llamar directamente a la función sin pasar por el logger para evitar recursión
                 debug_data["thread_info"] = watch_point_instance.debug_threads()
             
-            # Agregar logs recientes
+            
             debug_data["recent_logs"] = self.get_logs()[-50:]  # Últimos 50 logs
             
             # Guardar a archivo
@@ -207,7 +207,7 @@ class WatchPointLogger:
             self.error(f"Error guardando debug dump: {e}", "Debug")
             return None
         finally:
-            # Limpiar bandera de recursión
+            # Clear recursion flag
             self._saving_dump = False
 
 # Crear logger global
@@ -283,7 +283,7 @@ class WindowManager:
                 os.path.join(os.path.dirname(__file__), "watchpoint_settings.json")
             )
             self.shutdown_event = threading.Event()
-            self._start_time = time.time()  # Tiempo de inicio para estadísticas
+            self._start_time = time.time()  # Start time for statistics
             self.initialized = True
             
             # Iniciar watchdog
@@ -293,23 +293,53 @@ class WindowManager:
             wp_logger.info("WindowManager inicializado", "WindowManager")
 
     def show_image(self, display_idx, pil_img, text=None):
-        """Creates or updates a window to display an image and optional text."""
-        if display_idx in self.windows:
-            win_data = self.windows[display_idx]
+        """Creates or updates THE SINGLE global window to display an image and optional text."""
+        
+        # Check if any window exists, reuse it
+        if len(self.windows) > 0:
+            # Obtener el índice de la ventana existente (solo debería haber 1)
+            existing_idx = list(self.windows.keys())[0]
+            win_data = self.windows[existing_idx]
+            
+            # Verificar que la ventana esté corriendo
             if not win_data.get("running", False):
-                self._cleanup_window(display_idx)
+                # Window exists but is dead, clean up
+                wp_logger.warning(f"Ventana {existing_idx} existe pero no está running, limpiando", "ShowImage")
+                self._cleanup_window(existing_idx)
+                # Continuar a creación de nueva ventana (abajo)
             else:
+                # Window is alive, REUSE
+                wp_logger.debug(f"Reutilizando ventana existente {existing_idx} para nueva imagen", "ShowImage")
+                
+                # Actualizar imagen
                 with win_data["lock"]:
                     win_data["image"] = pil_img
+                
+                # Actualizar texto si existe
                 if text and win_data.get("instance"):
                     win_data["instance"].update_signal_text(text)
+                
+                # Update title if monitor changed
+                if existing_idx != display_idx:
+                    wp_logger.info(f"Monitor cambiado de {existing_idx} a {display_idx} (solo actualiza título)", "ShowImage")
+                    instance = win_data.get("instance")
+                    if instance and hasattr(instance, 'root'):
+                        try:
+                            # Update simplified title
+                            instance.root.title("Watch Point")
+                        except Exception as e:
+                            wp_logger.warning(f"No se pudo actualizar título: {e}", "ShowImage")
+                
                 return
-
+        
+        # If we reach here, NO window exists, create a new one
+        wp_logger.info(f"Creando nueva ventana global en Monitor {display_idx}", "ShowImage")
+        
         lock = Lock()
         win_data = {
             "image": pil_img, "lock": lock, "running": True,
             "instance": None, "pending_text": text,
-            "minimized": False  # NUEVO: Estado de minimización
+            "minimized": False
         }
         self.windows[display_idx] = win_data
         
@@ -324,7 +354,7 @@ class WindowManager:
             self.windows[display_idx]["closing"] = True
             self.windows[display_idx]["close_started"] = time.time()
             
-            # MEJORADO: Esperar hasta 3 segundos con timeout
+            
             try:
                 thread = self.windows[display_idx].get("thread")
                 if thread and thread.is_alive():
@@ -349,9 +379,9 @@ class WindowManager:
         root = None
         win_instance = None
         try:
-            # === CÓDIGO EXISTENTE SE MANTIENE IGUAL ===
+            # Create main window
             root = tk.Tk()
-            root.title(f"Watch Point - Monitor {display_idx}")
+            root.title("Watch Point")
             
             self._apply_icon(root)
             self._apply_geometry(root, display_idx)
@@ -684,11 +714,6 @@ class WatchPoint:
             display_idx = int(monitor.split(" ")[1])
         except (ValueError, IndexError):
             display_idx = 0
-
-        # Close the previous window if the monitor has changed
-        if self.last_display_idx != -1 and self.last_display_idx != display_idx:
-            wp_logger.info(f"Cambiando de monitor {self.last_display_idx} a {display_idx}", "WatchPoint")
-            self.window_manager.hide_window(self.last_display_idx)
 
         self.last_display_idx = display_idx
 

@@ -1,12 +1,36 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-# State files (no subir el JSON con datos)
-data/list_state.json
+# Virtual environments
+venv/
+env/
+ENV/
 
-# IDE
+# IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+debug_logs/
+
+# Temporal
+*.tmp
+*.temp
+
+# Settings personales (opcional)
+watchpoint_debug_config.json
+
+# State files (no subir el JSON con datos)
+beta/
+

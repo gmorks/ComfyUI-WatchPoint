@@ -1,6 +1,7 @@
 // watchpoint_floating.js
 // Watch Point Floating Preview Integration
 // Only captures images from Watch Point nodes
+// Configuration via localStorage
 
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
@@ -64,19 +65,56 @@ const DEFAULT_CONFIG = {
     }
 };
 
-// Configuration loader
-async function loadConfig() {
+// Configuration loader with localStorage support
+function loadConfig() {
     try {
-        const response = await fetch('/extensions/ComfyUI-WatchPoint/watchpoint_config.json');
-        if (response.ok) {
-            const userConfig = await response.json();
-            console.log("✅ Watch Point Floating: Loaded user config");
-            return { ...DEFAULT_CONFIG, ...userConfig };
+        const saved = localStorage.getItem('watchpoint-floating-config');
+        if (saved) {
+            const userConfig = JSON.parse(saved);
+            console.log("✅ Watch Point Floating: Loaded config from localStorage");
+            // Deep merge user config with defaults
+            return deepMerge(DEFAULT_CONFIG, userConfig);
         }
     } catch (e) {
-        console.log("ℹ️ Watch Point Floating: No custom config found, using defaults");
+        console.warn("⚠️ Watch Point Floating: Error loading localStorage config:", e);
     }
+    
+    console.log("ℹ️ Watch Point Floating: Using default config");
     return DEFAULT_CONFIG;
+}
+
+// Save configuration to localStorage
+function saveConfig(config) {
+    try {
+        localStorage.setItem('watchpoint-floating-config', JSON.stringify(config));
+        console.log("✅ Watch Point Floating: Config saved to localStorage");
+        return true;
+    } catch (e) {
+        console.error("❌ Watch Point Floating: Could not save config:", e);
+        return false;
+    }
+}
+
+// Deep merge helper
+function deepMerge(target, source) {
+    const output = Object.assign({}, target);
+    if (isObject(target) && isObject(source)) {
+        Object.keys(source).forEach(key => {
+            if (isObject(source[key])) {
+                if (!(key in target))
+                    Object.assign(output, { [key]: source[key] });
+                else
+                    output[key] = deepMerge(target[key], source[key]);
+            } else {
+                Object.assign(output, { [key]: source[key] });
+            }
+        });
+    }
+    return output;
+}
+
+function isObject(item) {
+    return item && typeof item === 'object' && !Array.isArray(item);
 }
 
 // Main extension
@@ -87,7 +125,7 @@ app.registerExtension({
         console.log("👁️ Watch Point Floating: Initializing...");
         
         // Load configuration
-        const config = await loadConfig();
+        const config = loadConfig();
         
         // Create the floating preview window
         const pip = new WatchPointFloatingWindow(config);
@@ -213,6 +251,65 @@ app.registerExtension({
         console.log("   - Toggle:", config.shortcuts.toggle);
         console.log("   - Opacity: Ctrl+Alt+[+/-]");
         console.log("   - Position: Ctrl+Alt+[Arrows] or Ctrl+Alt+[Numpad1-9]");
+        
+        // Expose global API for configuration
+        window.WatchPointFloating = {
+            getConfig: () => loadConfig(),
+            setConfig: (newConfig) => {
+                const merged = deepMerge(DEFAULT_CONFIG, newConfig);
+                if (saveConfig(merged)) {
+                    console.log("✅ Configuration saved. Reload page to apply changes.");
+                    return merged;
+                }
+                return null;
+            },
+            resetConfig: () => {
+                try {
+                    localStorage.removeItem('watchpoint-floating-config');
+                    console.log("✅ Watch Point Floating: Config reset to defaults. Reload page to apply.");
+                    return true;
+                } catch (e) {
+                    console.error("❌ Could not reset config:", e);
+                    return false;
+                }
+            },
+            showHelp: () => {
+                console.log(`
+🎨 Watch Point Floating Configuration Help
+==========================================
+
+View current config:
+  WatchPointFloating.getConfig()
+
+Change settings:
+  WatchPointFloating.setConfig({
+      window: { 
+          defaultWidth: 500, 
+          defaultHeight: 500,
+          defaultPosition: "top-right",
+          defaultOpacity: 80
+      },
+      shortcuts: {
+          toggle: "Ctrl+Alt+KeyP"
+      }
+  })
+
+Reset to defaults:
+  WatchPointFloating.resetConfig()
+
+Available positions:
+  top-left, top-center, top-right
+  middle-left, middle-center, middle-right
+  bottom-left, bottom-center, bottom-right
+
+Note: Reload page after changing config to apply changes.
+                `);
+            },
+            instance: pip
+        };
+        
+        console.log("🔧 Watch Point Floating: Global API exposed as window.WatchPointFloating");
+        console.log("   Run WatchPointFloating.showHelp() for configuration help");
     }
 });
 
