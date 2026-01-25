@@ -2,6 +2,9 @@
 ![alt text](media/preview.png)
 **Dual preview system for ComfyUI workflows**
 
+### 🤖 About This Project
+This node was created with the assistance of AI tools (Claude, Gemini, Kimi, and others) by a developer with limited Python experience. While functional, it may not follow all best practices or optimal implementations. We warmly invite you to fork, improve, and adapt this code to your needs—collaboration is what makes open-source thrive!
+
 Watch Point provides two simultaneous preview methods:
 - 🖥️ **Monitor Preview**: External Tkinter window on any monitor
 - 🖼️ **Floating Preview**: ComfyUI's built-in preview system
