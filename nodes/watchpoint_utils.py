@@ -13,7 +13,7 @@ except ImportError:
 
 DEBUG = True
 
-# --- WatchPoint Debug Toggle Node ---
+# WatchPoint Debug Toggle Node
 class WatchPointDebugToggle:
     """Simple node to enable/disable persistent debug mode - One click!"""
     
@@ -37,7 +37,7 @@ class WatchPointDebugToggle:
         else:
             return ("⚪ Persistent Debug DEACTIVATED\n📝 Dumps will be saved manually",)
 
-# --- WatchPoint Restore Window Node ---
+# WatchPoint Restore Window Node
 class WatchPointRestoreWindow:
     """Node to restore minimized windows - Recover your hidden windows!"""
     

@@ -11,7 +11,7 @@ import io
 import time
 import threading
 
-# --- Global Shutdown Registry ---
+# Global Shutdown Registry
 class ShutdownRegistry:
     """Global registry to handle shutdown without atexit"""
     _instance = None
@@ -46,7 +46,7 @@ class ShutdownRegistry:
 # Create global instance
 shutdown_registry = ShutdownRegistry()
 
-# --- Logging Structured ---
+# Logging Structured
 class WatchPointLogger:
     """Structured logging system for WatchPoint"""
     
@@ -62,11 +62,11 @@ class WatchPointLogger:
         self.load_debug_config()
     
     def log(self, level, message, component="WatchPoint"):
-        """Log un mensaje con nivel y componente"""
+        """Log a message with level and component"""
         if not self.enabled:
             return
         
-        # Verificar nivel de log
+        # Check log level
         levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3}
         if levels.get(level, 1) < levels.get(self.log_level, 1):
             return
@@ -85,7 +85,7 @@ class WatchPointLogger:
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
         
-        # Imprimir siempre errores
+        # Always print errors
         if level == "ERROR":
             print(f"WatchPoint [{timestamp}] {level}: {message}")
         elif level == "WARNING":
@@ -195,7 +195,7 @@ class WatchPointLogger:
             
             debug_data["recent_logs"] = self.get_logs()[-50:]  # Last 50 logs
             
-            # Guardar a archivo
+            # Save to file
             with open(filepath, 'w', encoding='utf-8') as f:
                 import json
                 json.dump(debug_data, f, indent=2, default=str)
@@ -227,7 +227,7 @@ try:
 except ImportError:
     SCREENINFO_AVAILABLE = False
 
-# --- Settings Management ---
+# Settings Management
 class SettingsManager:
     """Handles loading and saving of settings to a JSON file."""
     def __init__(self, settings_file):
@@ -266,7 +266,7 @@ class SettingsManager:
         """Sets a setting value."""
         self.settings[key] = value
 
-# --- Window Management ---
+# Window Management
 class WindowManager:
     """Manages the lifecycle and state of all Tkinter preview windows."""
     _instance = None
@@ -410,7 +410,6 @@ class WindowManager:
                         pass
             
             root.protocol("WM_DELETE_WINDOW", safe_close)
-            # === END EXISTING CODE ===
             
             # IMPROVED: Better mainloop exception handling
             try:
@@ -464,11 +463,11 @@ class WindowManager:
                             except:
                                 pass
                     else:
-                        # Si no estamos en el hilo principal, solo loggear y saltar Tkinter
+                        # If not in main thread, just log and skip Tkinter cleanup
                         wp_logger.warning(f"Skipping Tkinter cleanup from thread {current_thread.name} - Tcl_AsyncDelete protection", "WindowLoop")
                         continue
                     
-                    # Si estamos en el hilo principal, intentar limpieza
+                    # If in main thread, try cleanup
                     self._cleanup_window(display_idx)
                     break
                 except Exception as e:
@@ -683,10 +682,10 @@ class WindowManager:
         # Log successful shutdown completion
         wp_logger.info("Global shutdown completed successfully", "WindowManager")
 
-# --- Global Window Manager Instance ---
+# Global Window Manager Instance
 window_manager = WindowManager()
 
-# --- Main ComfyUI Node ---
+# Main ComfyUI Node
 class WatchPoint:
     """The main ComfyUI node class."""
     def __init__(self):
@@ -847,7 +846,7 @@ class WatchPoint:
                       f"{len(debug_info['daemon_threads'])} daemon threads", "WatchPoint")
         return debug_info
 
-# --- Tkinter UI Classes ---
+# Tkinter UI Classes
 class WatchPointWindow:
     """The main UI for a preview window."""
     def __init__(self, root, display_idx, manager):
@@ -897,7 +896,7 @@ class WatchPointWindow:
                 except:
                     pass
             
-            # Limpiar referencias a widgets
+            # Clean up canvas
             if hasattr(self, 'canvas') and self.canvas:
                 try:
                     self.canvas.delete("all")
@@ -1042,7 +1041,7 @@ class WatchPointWindow:
         if self.root.winfo_exists():
             self.root.after(0, _update)
 
-    # --- Event Handlers ---
+    # Event Handlers
     def _on_size_change(self, size_str):
         geom_str = self.manager.calculate_geometry_string(self.root, size_str, 800, 600)
         if geom_str: self.root.geometry(geom_str)
@@ -1155,11 +1154,11 @@ class WatchPointSettingsDialog:
         self.settings.save()
         self.dialog.destroy()
 
-# --- Node Registration ---
+# Node Registration
 NODE_CLASS_MAPPINGS = {"WatchPoint": WatchPoint}
 NODE_DISPLAY_NAME_MAPPINGS = {"WatchPoint": "👁️ Watch Point"}
 
-# --- Signal Scout Integration ---
+# Signal Scout Integration
 class WPSignalScout:
     """A simple node to send text to all Watch Point windows."""
     @classmethod
@@ -1175,7 +1174,7 @@ class WPSignalScout:
         except Exception as e:
             print(f"WP_Scout Error: Could not connect to Watch Point window: {e}")
 
-# --- Global Shutdown Function ---
+# Global Shutdown Function
 def cleanup_all_watchpoints():
     """Function to clean up all WatchPoint nodes without using atexit"""
     shutdown_registry.shutdown_all()
@@ -1186,7 +1185,7 @@ __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "cleanup_all_wat
 NODE_CLASS_MAPPINGS["WPSignalScout"] = WPSignalScout
 NODE_DISPLAY_NAME_MAPPINGS["WPSignalScout"] = "📡 WP Signal Scout"
 
-# --- Debug Node ---
+# Debug Node
 class WatchPointDebug:
     """Debug node for WatchPoint - Controls debug mode and captures dumps"""
     
@@ -1252,6 +1251,6 @@ class WatchPointDebug:
             pass
         return None
 
-# Agregar el nodo de debug a los mappings
+# Add the debug node to mappings
 NODE_CLASS_MAPPINGS["WatchPointDebug"] = WatchPointDebug
 NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebug"] = "🔧 Watch Point Debug"
