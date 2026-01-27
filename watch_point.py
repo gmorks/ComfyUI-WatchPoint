@@ -53,7 +53,7 @@ class ShutdownRegistry:
 # Create global instance
 shutdown_registry = ShutdownRegistry()
 
-# Logging Structured
+# Structured Logging
 class WatchPointLogger:
     """Structured logging system for WatchPoint"""
     
@@ -310,7 +310,7 @@ class WindowManager:
             self._start_time = time.time()  # Start time for statistics
             self.initialized = True
             
-            # Iniciar watchdog
+            # Start watchdog
             self.watchdog_thread = Thread(target=self._watchdog_loop, daemon=True)
             self.watchdog_thread.start()
             
@@ -397,7 +397,7 @@ class WindowManager:
         thread.start()
 
     def hide_window(self, display_idx):
-        """Signals a window to close with timeout garantizado."""
+        """Signals a window to close with guaranteed timeout."""
         if display_idx in self.windows:
             self.windows[display_idx]["running"] = False
             self.windows[display_idx]["closing"] = True
@@ -616,7 +616,7 @@ class WindowManager:
                     
                     # THREAD PROTECTION: Only try to join if current thread is NOT the window thread
                     if "thread" in win_data and win_data["thread"].is_alive():
-                        # Verificar que no estemos intentando hacer join a nosotros mismos
+                        # Verify we are not attempting to join ourselves
                         if win_data["thread"] != current_thread:
                             try:
                                 win_data["thread"].join(timeout=0.1)
@@ -778,7 +778,7 @@ class WatchPoint:
         return results
 
     def cleanup(self):
-        """Cleanup del nodo WatchPoint sin usar atexit"""
+        """Cleanup of WatchPoint node without using atexit"""
         if hasattr(self, 'window_manager'):
             self.window_manager.shutdown()
     

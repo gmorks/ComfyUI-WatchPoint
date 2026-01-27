@@ -1,6 +1,6 @@
 // watchpoint_floating.js
 // Watch Point Floating Preview Integration
-// Only captures images from Watch Point nodes
+// Captures images exclusively from Watch Point nodes
 // Configuration via localStorage
 
 import { app } from "../../scripts/app.js";
@@ -151,9 +151,8 @@ app.registerExtension({
             }
         });
         
-        // Add keyboard shortcuts
+        // Prevent shortcut activation when typing in input fields
         window.addEventListener("keydown", (e) => {
-            // Check if we're not typing in an input field
             const activeElement = document.activeElement;
             const isTyping = activeElement && (
                 activeElement.tagName === 'INPUT' || 
@@ -345,7 +344,7 @@ class WatchPointFloatingWindow {
         this.opacityIndicator = null;
         this.positionIndicator = null;
         
-        // Snap positions grid (for relative movement)
+        // Grid definition for relative snap positioning
         this.positionGrid = [
             ['top-left', 'top-center', 'top-right'],
             ['middle-left', 'middle-center', 'middle-right'],
