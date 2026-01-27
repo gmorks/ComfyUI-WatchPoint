@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced `main thread is not in main loop` and `Tcl_AsyncDelete` errors by keeping a single persistent Tkinter window instance.
 - Avoided dead preview threads by no longer destroying the window when `monitor_preview` is disabled.
 - Ensured stable fullscreen toggling (toolbar button and F11) without losing window state.
+- [WIP] Fullscreen mode consistently activates on the primary monitor (monitor 0) instead of the monitor where the application window is located. Work is in progress to ensure it activates on the correct monitor.
 
 ## [1.0.0] - 2026-01-24
 
