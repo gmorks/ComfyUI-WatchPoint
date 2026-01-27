@@ -428,6 +428,11 @@ MIT License - Feel free to use and modify!
 
 ## Recent Changes
 
+### v2.0.0 - Cleanup & Optimization
+* Removed debug nodes and utilities
+* Integrated Signal Scout text feature into main node
+* Simplified codebase while preserving stability
+
 ### v1.0.0 - Initial Release
 
 * Dual preview system (Monitor + Floating)

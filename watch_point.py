@@ -46,23 +46,74 @@ class ShutdownRegistry:
 # Create global instance
 shutdown_registry = ShutdownRegistry()
 
-# Logging Structured (Simplified)
+# Logging Structured
 class WatchPointLogger:
-    """Simple logging system for WatchPoint"""
+    """Structured logging system for WatchPoint"""
     
     def __init__(self):
         self.enabled = True
+        self.log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR
+        self.logs = []
+        self.max_logs = 100
     
     def log(self, level, message, component="WatchPoint"):
-        if not self.enabled: return
+        """Log a message with level and component"""
+        if not self.enabled:
+            return
+        
+        # Check log level
+        levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3}
+        if levels.get(level, 1) < levels.get(self.log_level, 1):
+            return
+        
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        if level in ["ERROR", "WARNING"]:
+        log_entry = {
+            "timestamp": timestamp,
+            "level": level,
+            "component": component,
+            "message": message
+        }
+        
+        self.logs.append(log_entry)
+        
+        # Keep only the latest logs
+        if len(self.logs) > self.max_logs:
+            self.logs.pop(0)
+        
+        # Always print errors
+        if level == "ERROR":
+            print(f"WatchPoint [{timestamp}] {level}: {message}")
+        elif level == "WARNING":
             print(f"WatchPoint [{timestamp}] {level}: {message}")
     
-    def debug(self, message, component="WatchPoint"): pass # Debug silenced
-    def info(self, message, component="WatchPoint"): self.log("INFO", message, component)
-    def warning(self, message, component="WatchPoint"): self.log("WARNING", message, component)
-    def error(self, message, component="WatchPoint"): self.log("ERROR", message, component)
+    def debug(self, message, component="WatchPoint"):
+        self.log("DEBUG", message, component)
+    
+    def info(self, message, component="WatchPoint"):
+        self.log("INFO", message, component)
+    
+    def warning(self, message, component="WatchPoint"):
+        self.log("WARNING", message, component)
+    
+    def error(self, message, component="WatchPoint"):
+        self.log("ERROR", message, component)
+        
+    def get_logs(self, level=None, component=None):
+        """Get filtered logs by level and component"""
+        filtered_logs = self.logs
+        
+        if level:
+            filtered_logs = [log for log in filtered_logs if log["level"] == level]
+        
+        if component:
+            filtered_logs = [log for log in filtered_logs if log["component"] == component]
+        
+        return filtered_logs
+    
+    def clear_logs(self):
+        """Clear all logs"""
+        self.logs = []
+
 
 # Create global logger
 wp_logger = WatchPointLogger()
@@ -269,9 +320,12 @@ class WindowManager:
             try:
                 root.mainloop()
             except RuntimeError as e:
+                # Common RuntimeError when closing: "main thread is not in main loop"
                 if "main thread" not in str(e):
                     wp_logger.error(f"RuntimeError in mainloop: {e}", "WindowLoop")
                     raise
+                else:
+                    wp_logger.debug(f"Expected RuntimeError in mainloop: {e}", "WindowLoop")
             except Exception as e:
                 wp_logger.error(f"Error in Tkinter mainloop: {e}", "WindowLoop")
         
@@ -316,6 +370,40 @@ class WindowManager:
                     if attempt == 2:
                         wp_logger.error(f"Cleanup failed after 3 attempts: {e}", "WindowLoop")
                     time.sleep(0.05)
+
+    def restore_window(self, display_idx):
+        """Restore a minimized window - To recover it from the taskbar!"""
+        if display_idx in self.windows:
+            win_data = self.windows[display_idx]
+            
+            # Check if it's minimized
+            if not win_data.get("minimized", False):
+                wp_logger.debug(f"Window {display_idx} is not minimized", "RestoreWindow")
+                return False
+            
+            instance = win_data.get("instance")
+            if not instance:
+                wp_logger.warning(f"Cannot restore window {display_idx}: invalid instance", "RestoreWindow")
+                return False
+            
+            try:
+                # Restore the window using the instance's root
+                if hasattr(instance, 'root') and instance.root:
+                    instance.root.deiconify()  # Make visible again
+                    instance.root.lift()  # Bring to front
+                    instance.root.focus_force()  # Give focus
+                    
+                    # Update state
+                    win_data["minimized"] = False
+                    wp_logger.info(f"Window {display_idx} restored successfully", "RestoreWindow")
+                return True
+                
+            except Exception as e:
+                wp_logger.error(f"Error restoring window {display_idx}: {e}", "RestoreWindow")
+                return False
+        else:
+            wp_logger.warning(f"Window {display_idx} does not exist", "RestoreWindow")
+            return False
 
     def _apply_icon(self, root):
         """Applies the icon from a file to the window."""
@@ -449,6 +537,23 @@ class WindowManager:
             except Exception as e:
                 wp_logger.error(f"Error in force cleanup: {e}", "Cleanup")
 
+    def get_health_stats(self):
+        """Get health statistics of the system"""
+        stats = {
+            "total_windows_created": len(self.windows),
+            "active_windows": len([w for w in self.windows.values() if w.get("running", False)]),
+            "closing_windows": len([w for w in self.windows.values() if w.get("closing", False)]),
+            "threads_alive": len([w for w in self.windows.values() if w.get("thread") and w["thread"].is_alive()]),
+            "watchdog_status": "running" if hasattr(self, 'watchdog_thread') and self.watchdog_thread.is_alive() else "stopped",
+            "shutdown_event": self.shutdown_event.is_set(),
+            "uptime": time.time() - getattr(self, '_start_time', time.time())
+        }
+        
+        # Add thread information
+        import threading
+        stats["total_threads"] = threading.active_count()
+        
+        return stats
     def shutdown(self):
         """Shutdown global del WindowManager without using atexit"""
         wp_logger.info("Initiating global shutdown...", "WindowManager")
@@ -547,6 +652,15 @@ class WatchPoint:
         """Cleanup del nodo WatchPoint sin usar atexit"""
         if hasattr(self, 'window_manager'):
             self.window_manager.shutdown()
+    
+    def get_logs(self, level=None, component=None):
+        """Get system logging logs"""
+        return wp_logger.get_logs(level, component)
+    
+    def clear_logs(self):
+        """Clear all logs"""
+        wp_logger.clear_logs()
+        wp_logger.info("Logs cleared", "WatchPoint")
 
 # Tkinter UI Classes
 class WatchPointWindow:
