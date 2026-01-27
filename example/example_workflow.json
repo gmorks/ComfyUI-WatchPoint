@@ -1,19 +1,19 @@
 {
-  "id": "d744fb0e-f3c7-4705-9960-73b30103a194",
+  "id": "cace63f9-d3c4-4404-b104-a92ae6f4a39c",
   "revision": 0,
-  "last_node_id": 6,
-  "last_link_id": 7,
+  "last_node_id": 4,
+  "last_link_id": 3,
   "nodes": [
     {
       "id": 1,
       "type": "LoadImage",
       "pos": [
-        17300,
-        -9670
+        17516.217672413797,
+        -9479.91185344828
       ],
       "size": [
-        222.83333587646484,
-        314
+        225,
+        351
       ],
       "flags": {},
       "order": 0,
@@ -24,7 +24,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            4
+            2
           ]
         },
         {
@@ -44,15 +44,15 @@
       ]
     },
     {
-      "id": 4,
+      "id": 2,
       "type": "PrimitiveString",
       "pos": [
-        17100,
-        -9270
+        17316.217672413797,
+        -9079.91185344828
       ],
       "size": [
         500,
-        58
+        88
       ],
       "flags": {},
       "order": 1,
@@ -63,7 +63,7 @@
           "name": "STRING",
           "type": "STRING",
           "links": [
-            5
+            3
           ]
         }
       ],
@@ -77,62 +77,15 @@
       ]
     },
     {
-      "id": 5,
-      "type": "WatchPoint",
-      "pos": [
-        17600,
-        -9670
-      ],
-      "size": [
-        210,
-        338
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 4
-        },
-        {
-          "name": "opt_signal_text",
-          "shape": 7,
-          "type": "STRING",
-          "link": 5
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            7
-          ]
-        }
-      ],
-      "properties": {
-        "aux_id": "gmorks/ComfyUI-WatchPoint",
-        "ver": "9c383314405e0767edb67ac208b87b4bac7a2448",
-        "Node name for S&R": "WatchPoint"
-      },
-      "widgets_values": [
-        true,
-        true,
-        "Monitor 0 (1920x1080)"
-      ]
-    },
-    {
-      "id": 6,
+      "id": 3,
       "type": "PreviewImage",
       "pos": [
-        17900,
-        -9670
+        18116.217672413797,
+        -9479.91185344828
       ],
       "size": [
-        140,
-        246
+        225,
+        156
       ],
       "flags": {},
       "order": 3,
@@ -141,7 +94,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 7
+          "link": 1
         }
       ],
       "outputs": [],
@@ -151,32 +104,78 @@
         "Node name for S&R": "PreviewImage"
       },
       "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "WatchPoint",
+      "pos": [
+        17816.217672413797,
+        -9479.91185344828
+      ],
+      "size": [
+        225,
+        128
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "opt_signal_text",
+          "shape": 7,
+          "type": "STRING",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "gmorks/ComfyUI-WatchPoint",
+        "ver": "5a34852e6274bbc9777a1e94a6e35bd979bafc18",
+        "Node name for S&R": "WatchPoint"
+      },
+      "widgets_values": [
+        true,
+        true
+      ]
     }
   ],
   "links": [
     [
-      4,
       1,
+      4,
       0,
-      5,
+      3,
       0,
       "IMAGE"
     ],
     [
-      5,
+      2,
+      1,
+      0,
       4,
       0,
-      5,
+      "IMAGE"
+    ],
+    [
+      3,
+      2,
+      0,
+      4,
       1,
       "STRING"
-    ],
-    [
-      7,
-      5,
-      0,
-      6,
-      0,
-      "IMAGE"
     ]
   ],
   "groups": [],
@@ -185,8 +184,8 @@
     "ds": {
       "scale": 0.725,
       "offset": [
-        -16829.321120689645,
-        9914.394612068972
+        -16578.28663793104,
+        10048.187715517246
       ]
     },
     "frontendVersion": "1.37.11",
