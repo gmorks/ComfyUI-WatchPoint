@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Global monitor configuration via `watchpoint_settings.json` using `monitor_index`.
 - Monitor selection UI inside the Tkinter settings dialog (⚙), with live window repositioning.
+- Added dynamic multi-monitor fullscreen support:
+    - Automatically detects the current monitor when toggling fullscreen.
+    - Expands correctly to the monitor where the window is located.
+    - Cross-platform detection using `ctypes` (Windows) with Tkinter fallbacks.
 
 ### Changed
 - Simplified WatchPoint node structure.
@@ -28,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Reduced `main thread is not in main loop` and `Tcl_AsyncDelete` errors by keeping a single persistent Tkinter window instance.
 - Avoided dead preview threads by no longer destroying the window when `monitor_preview` is disabled.
+- Ensured stable fullscreen toggling (toolbar button and F11) without losing window state.
 
 ## [1.0.0] - 2026-01-24
 

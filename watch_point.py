@@ -10,6 +10,13 @@ import folder_paths
 import io
 import time
 import threading
+try:
+    import ctypes
+    if sys.platform.startswith("win"):
+        from ctypes import wintypes
+    CTYPES_AVAILABLE = True
+except ImportError:
+    CTYPES_AVAILABLE = False
 
 # Global Shutdown Registry
 class ShutdownRegistry:
@@ -132,6 +139,109 @@ try:
 except ImportError:
     SCREENINFO_AVAILABLE = False
 
+
+class Tooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        self.widget.bind("<Enter>", self._show)
+        self.widget.bind("<Leave>", self._hide)
+
+    def _show(self, event=None):
+        if self.tipwindow or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tw,
+            text=self.text,
+            background="#ffffe0",
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("tahoma", 8),
+        )
+        label.pack(ipadx=4, ipady=2)
+
+    def _hide(self, event=None):
+        if self.tipwindow is not None:
+            self.tipwindow.destroy()
+            self.tipwindow = None
+
+# Monitor Detection
+if sys.platform.startswith("win") and CTYPES_AVAILABLE:
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("rcMonitor", wintypes.RECT),
+            ("rcWork", wintypes.RECT),
+            ("dwFlags", wintypes.DWORD),
+        ]
+
+class MonitorTracker:
+    """Handles cross-platform monitor detection."""
+    def __init__(self):
+        self.user32 = None
+        if sys.platform.startswith("win") and CTYPES_AVAILABLE:
+            try:
+                self.user32 = ctypes.windll.user32
+            except Exception as e:
+                print(f"WatchPoint: Failed to load user32: {e}")
+
+    def get_monitor_geometry(self, widget):
+        """
+        Returns (x, y, width, height) of the monitor containing the widget's center.
+        """
+        # 1. Try Windows ctypes (Most accurate for Windows)
+        if self.user32:
+            try:
+                x = widget.winfo_rootx()
+                y = widget.winfo_rooty()
+                width = widget.winfo_width()
+                height = widget.winfo_height()
+                
+                cx = x + width // 2
+                cy = y + height // 2
+                
+                point = wintypes.POINT(cx, cy)
+                MONITOR_DEFAULTTONEAREST = 2
+                hMonitor = self.user32.MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+                
+                mi = MONITORINFO()
+                mi.cbSize = ctypes.sizeof(MONITORINFO)
+                
+                if self.user32.GetMonitorInfoW(hMonitor, ctypes.byref(mi)):
+                    r = mi.rcMonitor
+                    return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+            except Exception as e:
+                # Silently fail and try next method
+                pass
+        
+        # 2. Try screeninfo (Cross-platform if installed)
+        if SCREENINFO_AVAILABLE:
+            try:
+                # Need absolute coordinates
+                x = widget.winfo_rootx()
+                y = widget.winfo_rooty()
+                cx = x + widget.winfo_width() // 2
+                cy = y + widget.winfo_height() // 2
+                
+                for m in get_monitors():
+                    if (m.x <= cx < m.x + m.width) and (m.y <= cy < m.y + m.height):
+                        return (m.x, m.y, m.width, m.height)
+            except Exception:
+                pass
+                
+        # 3. Fallback to Tkinter screen info (Primary monitor or screen containing widget)
+        # Note: winfo_screenwidth/height typically return primary monitor size
+        try:
+            return (0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight())
+        except:
+            return (0, 0, 800, 600)
+
 # Settings Management
 class SettingsManager:
     """Handles loading and saving of settings to a JSON file."""
@@ -142,6 +252,7 @@ class SettingsManager:
             "window_x": None, "window_y": None,
             "window_size_mode": "fixed",
             "show_toolbar": True, "save_format": "png", "jpeg_quality": 90,
+            "start_fullscreen": False,
             "monitor_index": 0,
         }
         self.settings = self.load()
@@ -238,11 +349,27 @@ class WindowManager:
                     
                     if win_data.get("instance"):
                         win_data["instance"].display_idx = target_monitor_idx
+                        
+                        # Handle fullscreen move
+                        was_fullscreen = False
+                        if hasattr(win_data["instance"], "fullscreen_active") and win_data["instance"].fullscreen_active:
+                            was_fullscreen = True
+                            # Disable fullscreen to allow move
+                            win_data["instance"]._set_fullscreen(False)
+
                         # Move the window
                         try:
                             self._apply_geometry(win_data["instance"].root, target_monitor_idx)
                         except Exception as e:
                             wp_logger.error(f"Error moving window: {e}", "ShowImage")
+                        
+                        # Re-enable fullscreen if needed (now on new monitor)
+                        if was_fullscreen:
+                            try:
+                                win_data["instance"].root.update_idletasks()
+                                win_data["instance"]._set_fullscreen(True)
+                            except Exception as e:
+                                wp_logger.warning(f"Error restoring fullscreen after move: {e}", "ShowImage")
                 
                 return
         
@@ -665,12 +792,14 @@ class WatchPointWindow:
         self.display_idx = display_idx
         self.manager = manager
         self.settings = manager.settings_manager
+        self.monitor_tracker = MonitorTracker()
         
         # UI State
         self.zoom_level, self.pan_x, self.pan_y = 1.0, 0, 0
         self.is_dragging, self.drag_start_x, self.drag_start_y = False, 0, 0
         self.zoom_1to1_active = False
         self.drawer_visible = True
+        self.fullscreen_active = False
         self.toolbar_visible = self.settings.get("show_toolbar", True)
         self.current_pil_image, self.photo_image = None, None
         
@@ -744,9 +873,13 @@ class WatchPointWindow:
     def _create_toolbar(self):
         self.toolbar = tk.Frame(self.main_frame, bg='#2a2a2a', height=40)
         btn_style = {'bg': '#3a3a3a', 'fg': 'white', 'relief': tk.FLAT, 'padx': 8, 'pady': 4}
-        
-        for text, cmd in [("↻ Reset", self._reset_zoom), ("⊕ Zoom In", self._zoom_in), ("⊖ Zoom Out", self._zoom_out), ("1:1", self._zoom_1to1)]:
-            tk.Button(self.toolbar, text=text, command=cmd, **btn_style).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.toolbar, text="↻ Reset", command=self._reset_zoom, **btn_style).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.toolbar, text="⊕ Zoom In", command=self._zoom_in, **btn_style).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.toolbar, text="⊖ Zoom Out", command=self._zoom_out, **btn_style).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.toolbar, text="1:1", command=self._zoom_1to1, **btn_style).pack(side=tk.LEFT, padx=2)
+        self.fullscreen_btn = tk.Button(self.toolbar, text="⛶", command=self._toggle_fullscreen, **btn_style)
+        self.fullscreen_btn.pack(side=tk.LEFT, padx=2)
+        Tooltip(self.fullscreen_btn, "Toggle fullscreen (F11)")
         
         size_opts = ["800x600", "1024x768", "1920x1080", "Half Vertical", "Half Horizontal", "Quarter"]
         size_menu = tk.OptionMenu(self.toolbar, self.size_var, *size_opts, command=self._on_size_change)
@@ -795,6 +928,7 @@ class WatchPointWindow:
         self.root.bind("<r>", lambda e: self._reset_zoom())
         self.root.bind("<t>", lambda e: self._toggle_toolbar())
         self.root.bind("<p>", lambda e: self._toggle_drawer())
+        self.root.bind("<F11>", lambda e: self._toggle_fullscreen())
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _set_initial_state(self):
@@ -804,6 +938,9 @@ class WatchPointWindow:
             self.size_var.set(size_mode)
         else:
             self.size_var.set(f'{self.settings.get("window_width")}x{self.settings.get("window_height")}')
+        
+        if self.settings.get("start_fullscreen", False):
+            self._set_fullscreen(True)
         
         # Process pending text
         win_data = self.manager.windows.get(self.display_idx, {})
@@ -863,6 +1000,7 @@ class WatchPointWindow:
         self.settings.set("window_x", self.root.winfo_x())
         self.settings.set("window_y", self.root.winfo_y())
         self.settings.set("show_toolbar", self.toolbar_visible)
+        self.settings.set("start_fullscreen", self.fullscreen_active)
         if 'x' in self.size_var.get():
             try:
                 w, h = map(int, self.size_var.get().split('x'))
@@ -875,6 +1013,36 @@ class WatchPointWindow:
         self.manager.hide_window(self.display_idx)
         try: self.root.destroy()
         except tk.TclError: pass
+
+    def _set_fullscreen(self, value):
+        self.fullscreen_active = bool(value)
+        
+        # Monitor Detection for Fullscreen
+        if self.fullscreen_active:
+            try:
+                # Detect current monitor geometry
+                mx, my, mw, mh = self.monitor_tracker.get_monitor_geometry(self.root)
+                
+                wp_logger.info(f"Fullscreen: Detected monitor at ({mx}, {my}) size {mw}x{mh}", "WatchPointWindow")
+
+                # Apply geometry to ensure fullscreen on correct monitor
+                self.root.geometry(f"{mw}x{mh}+{mx}+{my}")
+                self.root.update_idletasks()
+            except Exception as e:
+                pass
+
+        try:
+            self.root.attributes("-fullscreen", self.fullscreen_active)
+        except tk.TclError:
+            pass
+        if hasattr(self, "fullscreen_btn"):
+            if self.fullscreen_active:
+                self.fullscreen_btn.config(relief=tk.SUNKEN, bg="#505050")
+            else:
+                self.fullscreen_btn.config(relief=tk.FLAT, bg="#3a3a3a")
+
+    def _toggle_fullscreen(self):
+        self._set_fullscreen(not self.fullscreen_active)
 
     def _toggle_toolbar(self):
         self.toolbar_visible = not self.toolbar_visible
@@ -931,6 +1099,7 @@ class WatchPointSettingsDialog:
         self.dialog.resizable(False, False)
 
         self.show_toolbar_var = tk.BooleanVar(value=self.settings.get("show_toolbar"))
+        self.start_fullscreen_var = tk.BooleanVar(value=self.settings.get("start_fullscreen", False))
         self.save_format_var = tk.StringVar(value=self.settings.get("save_format"))
         self.jpeg_quality_var = tk.IntVar(value=self.settings.get("jpeg_quality"))
 
@@ -957,6 +1126,7 @@ class WatchPointSettingsDialog:
                 print(f"Watch Point: Error listing monitors: {e}")
 
         tk.Checkbutton(frame, text="Show Toolbar on Startup", variable=self.show_toolbar_var).pack(anchor="w")
+        tk.Checkbutton(frame, text="Start in Fullscreen Mode", variable=self.start_fullscreen_var).pack(anchor="w")
         
         fmt_frame = tk.LabelFrame(frame, text="Default Save Format", padx=10, pady=10)
         fmt_frame.pack(anchor="w", fill="x", pady=(10, 5))
@@ -993,6 +1163,7 @@ class WatchPointSettingsDialog:
 
     def _save_and_close(self):
         self.settings.set("show_toolbar", self.show_toolbar_var.get())
+        self.settings.set("start_fullscreen", self.start_fullscreen_var.get())
         self.settings.set("save_format", self.save_format_var.get())
         self.settings.set("jpeg_quality", self.jpeg_quality_var.get())
         self.settings.save()

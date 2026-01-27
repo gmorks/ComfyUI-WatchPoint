@@ -7,5 +7,6 @@
   "show_toolbar": true,
   "save_format": "png",
   "jpeg_quality": 90,
+  "start_fullscreen": false,
   "monitor_index": 1
 }
