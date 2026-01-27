@@ -91,8 +91,8 @@ The main preview node.
 2. Connect an `IMAGE` input.
 3. Enable/disable previews:
 * `floating_preview`: Enable ComfyUI's built-in preview.
-* `monitor_preview`: Enable the external monitor window.
-4. Select the target `monitor` from the dropdown.
+* `monitor_preview`: Enable or pause the external monitor window (window stays alive, image updates only when True).
+4. Configure the target monitor via the **⚙ Settings** dialog or by editing `watchpoint_settings.json` (`monitor_index`).
 5. The node acts as a pass-through for the `IMAGE` output.
 
 ### Optional string input
@@ -142,14 +142,19 @@ Access settings via the **⚙ Settings** button in the toolbar.
 
 ### Save Options
 
-* Default format: PNG, JPEG, or WebP
+* Default format: PNG or JPEG
 * JPEG quality slider (10-100)
+
+### Monitor Options
+
+* Select the target monitor from the **Monitor** dropdown in the Settings dialog.
+* Persist the monitor selection globally via `monitor_index` in `watchpoint_settings.json`.
 
 ### UI Options
 
 * Show/hide toolbar by default
 
-All settings are saved to `watchpoint_settings.json`
+All settings are saved to `watchpoint_settings.json`.
 
 ---
 
@@ -168,7 +173,8 @@ Edit `watchpoint_settings.json` to customize defaults for the external Tkinter w
   "window_size_mode": "fixed",
   "show_toolbar": true,
   "save_format": "png",
-  "jpeg_quality": 90
+  "jpeg_quality": 90,
+  "monitor_index": 0
 }
 
 ```
@@ -178,8 +184,9 @@ Edit `watchpoint_settings.json` to customize defaults for the external Tkinter w
 * `window_x`, `window_y`: Window position (null = auto)
 * `window_size_mode`: "fixed", "Half Vertical", "Half Horizontal", or "Quarter"
 * `show_toolbar`: Show toolbar on startup
-* `save_format`: Default save format ("png", "jpeg", "webp")
+* `save_format`: Default save format ("png" or "jpeg")
 * `jpeg_quality`: JPEG compression quality (10-100)
+* `monitor_index`: Index of the monitor used for the external preview (0 = first monitor).
 
 ### Floating Preview Configuration
 
@@ -385,9 +392,10 @@ pip install pywin32
 
 ### Window doesn't appear
 
-* Check if `monitor_preview` is enabled (True)
-* Try different monitor selection
-* Check console for error messages
+* Check if `monitor_preview` is enabled (True).
+* Open the **⚙ Settings** dialog and verify that a valid monitor is selected.
+* Alternatively, check that `monitor_index` in `watchpoint_settings.json` points to an existing monitor.
+* Check console for error messages.
 
 ### Window appears in wrong location
 
@@ -396,9 +404,10 @@ pip install pywin32
 
 ### Image not updating
 
-* Ensure workflow is executing
-* Check that image is connected to Watch Point input
-* Try disabling/re-enabling monitor preview
+* Ensure workflow is executing.
+* Check that image is connected to Watch Point input.
+* Verify that `monitor_preview` is enabled (True); when False, the window stays open but the image will not refresh.
+* Try disabling/re-enabling monitor preview.
 
 ### Floating preview not working
 

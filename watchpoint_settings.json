@@ -6,5 +6,6 @@
   "window_size_mode": "Half Vertical",
   "show_toolbar": true,
   "save_format": "png",
-  "jpeg_quality": 90
+  "jpeg_quality": 90,
+  "monitor_index": 1
 }

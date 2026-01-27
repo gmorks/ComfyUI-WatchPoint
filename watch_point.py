@@ -142,6 +142,7 @@ class SettingsManager:
             "window_x": None, "window_y": None,
             "window_size_mode": "fixed",
             "show_toolbar": True, "save_format": "png", "jpeg_quality": 90,
+            "monitor_index": 0,
         }
         self.settings = self.load()
 
@@ -197,8 +198,10 @@ class WindowManager:
             
             wp_logger.info("WindowManager initialized", "WindowManager")
 
-    def show_image(self, display_idx, pil_img, text=None):
+    def show_image(self, pil_img, text=None):
         """Creates or updates THE SINGLE global window to display an image and optional text."""
+        
+        target_monitor_idx = self.settings_manager.get("monitor_index", 0)
         
         # Check if any window exists, reuse it
         if len(self.windows) > 0:
@@ -224,22 +227,28 @@ class WindowManager:
                 if text and win_data.get("instance"):
                     win_data["instance"].update_signal_text(text)
                 
-                # Update title if monitor changed
-                if existing_idx != display_idx:
-                    # Monitor changed, update title
-                    wp_logger.info(f"Monitor changed from {existing_idx} to {display_idx} (only updates title)", "ShowImage")
-                    instance = win_data.get("instance")
-                    if instance and hasattr(instance, 'root'):
+                # Update monitor if changed
+                if existing_idx != target_monitor_idx:
+                    # Monitor changed, move window
+                    wp_logger.info(f"Monitor changed from {existing_idx} to {target_monitor_idx} - Moving Window", "ShowImage")
+                    
+                    # Move data to new key
+                    self.windows[target_monitor_idx] = self.windows.pop(existing_idx)
+                    win_data = self.windows[target_monitor_idx]
+                    
+                    if win_data.get("instance"):
+                        win_data["instance"].display_idx = target_monitor_idx
+                        # Move the window
                         try:
-                            # Update simplified title
-                            instance.root.title("Watch Point")
+                            self._apply_geometry(win_data["instance"].root, target_monitor_idx)
                         except Exception as e:
-                            wp_logger.warning(f"Could not update title: {e}", "ShowImage")
+                            wp_logger.error(f"Error moving window: {e}", "ShowImage")
                 
                 return
         
         # If we reach here, NO window exists, create a new one
-        wp_logger.info(f"Creating new global window on Monitor {display_idx}", "ShowImage")
+        wp_logger.info(f"Creating new global window on Monitor {target_monitor_idx}", "ShowImage")
+        display_idx = target_monitor_idx
         
         lock = Lock()
         win_data = {
@@ -586,24 +595,17 @@ class WatchPoint:
     """The main ComfyUI node class."""
     def __init__(self):
         self.window_manager = window_manager 
-        self.last_display_idx = -1
         
         # Register for cleanup
         shutdown_registry.register(self)
 
     @classmethod
     def INPUT_TYPES(cls):
-        monitors = ["Monitor 0 (Default)"]
-        if SCREENINFO_AVAILABLE:
-            try:
-                monitors = [f"Monitor {i} ({m.width}x{m.height})" for i, m in enumerate(get_monitors())]
-            except Exception: pass
         return {
             "required": {
                 "images": ("IMAGE",),
                 "floating_preview": ("BOOLEAN", {"default": True}),
                 "monitor_preview": ("BOOLEAN", {"default": True}),
-                "monitor": (monitors, {"default": monitors[0]}),
             },
             "optional": {"opt_signal_text": ("STRING", {"forceInput": True, "multiline": True})}
         }
@@ -613,22 +615,15 @@ class WatchPoint:
     OUTPUT_NODE = True
     CATEGORY = "WatchPoint"
 
-    def watch(self, images, floating_preview=True, monitor_preview=True, monitor="Monitor 0", opt_signal_text=None):
-        try:
-            display_idx = int(monitor.split(" ")[1])
-        except (ValueError, IndexError):
-            display_idx = 0
-
-        self.last_display_idx = display_idx
-
+    def watch(self, images, floating_preview=True, monitor_preview=True, opt_signal_text=None):
         if monitor_preview:
-            wp_logger.debug(f"Showing preview on monitor {display_idx}", "WatchPoint")
             image = 255.0 * images[0].cpu().numpy()
             pil_img = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
-            self.window_manager.show_image(display_idx, pil_img, opt_signal_text)
-        else:
-            wp_logger.debug(f"Hiding preview on monitor {display_idx}", "WatchPoint")
-            self.window_manager.hide_window(display_idx)
+            self.window_manager.show_image(pil_img, opt_signal_text)
+        
+        # If monitor_preview is False, we do NOTHING.
+        # The window remains open (static) if it was already open.
+        # We do NOT call hide_window().
 
         ui_images = self._prepare_preview(images) if floating_preview else []
         
@@ -908,7 +903,7 @@ class WatchPointWindow:
             except Exception as e:
                 messagebox.showerror("Save Error", f"Could not save image:\n{e}")
 
-    def _open_settings(self): WatchPointSettingsDialog(self.root, self.settings)
+    def _open_settings(self): WatchPointSettingsDialog(self.root, self.settings, self)
     def _on_mouse_wheel(self, e): self._zoom_in() if e.delta > 0 else self._zoom_out()
     def _on_mouse_down(self, e): self.is_dragging, self.drag_start_x, self.drag_start_y = True, e.x, e.y
     def _on_mouse_up(self, e): self.is_dragging = False
@@ -926,8 +921,9 @@ class WatchPointWindow:
 
 class WatchPointSettingsDialog:
     """A dialog for changing application settings."""
-    def __init__(self, parent, settings_manager):
+    def __init__(self, parent, settings_manager, window_instance=None):
         self.settings = settings_manager
+        self.window_instance = window_instance
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Settings")
         self.dialog.transient(parent)
@@ -940,6 +936,26 @@ class WatchPointSettingsDialog:
 
         frame = tk.Frame(self.dialog, padx=15, pady=15)
         frame.pack(fill="both", expand=True)
+        
+        # Monitor Selection
+        if SCREENINFO_AVAILABLE:
+            try:
+                monitors = [f"Monitor {i} ({m.width}x{m.height})" for i, m in enumerate(get_monitors())]
+                if monitors:
+                    m_frame = tk.LabelFrame(frame, text="Monitor", padx=10, pady=10)
+                    m_frame.pack(anchor="w", fill="x", pady=(0, 10))
+                    
+                    current_idx = self.settings.get("monitor_index", 0)
+                    self.monitor_var = tk.StringVar()
+                    try:
+                        self.monitor_var.set(monitors[current_idx])
+                    except IndexError:
+                        self.monitor_var.set(monitors[0])
+                        
+                    tk.OptionMenu(m_frame, self.monitor_var, *monitors, command=self._on_monitor_change).pack(anchor="w")
+            except Exception as e:
+                print(f"Watch Point: Error listing monitors: {e}")
+
         tk.Checkbutton(frame, text="Show Toolbar on Startup", variable=self.show_toolbar_var).pack(anchor="w")
         
         fmt_frame = tk.LabelFrame(frame, text="Default Save Format", padx=10, pady=10)
@@ -949,21 +965,33 @@ class WatchPointSettingsDialog:
 
         self.q_frame = tk.LabelFrame(frame, text="JPEG Quality", padx=10, pady=10)
         self.q_frame.pack(anchor="w", fill="x", pady=(0, 10))
-        self.q_scale = tk.Scale(self.q_frame, from_=1, to=100, orient="horizontal", variable=self.jpeg_quality_var)
-        self.q_scale.pack(anchor="w", fill="x")
+        
+        tk.Scale(self.q_frame, from_=10, to=100, orient=tk.HORIZONTAL, variable=self.jpeg_quality_var).pack(fill="x")
         self._toggle_quality()
 
-        btn_frame = tk.Frame(frame)
-        btn_frame.pack(fill="x", side="bottom")
-        tk.Button(btn_frame, text="Save", command=self._save_close).pack(side="right", padx=(5,0))
-        tk.Button(btn_frame, text="Cancel", command=self.dialog.destroy).pack(side="right")
-        self.dialog.wait_window()
+        btn_frame = tk.Frame(self.dialog, pady=10)
+        btn_frame.pack(fill="x")
+        tk.Button(btn_frame, text="Save & Close", command=self._save_and_close, bg="#4a4a4a", fg="white").pack(side="right")
+
+    def _on_monitor_change(self, selected_str):
+        try:
+            idx = int(selected_str.split(" ")[1])
+            self.settings.set("monitor_index", idx)
+            self.settings.save()
+            
+            # Live update if possible
+            if self.window_instance and self.window_instance.current_pil_image:
+                 self.window_instance.manager.show_image(self.window_instance.current_pil_image)
+        except Exception as e:
+            print(f"Watch Point: Error changing monitor: {e}")
 
     def _toggle_quality(self):
-        state = "normal" if self.save_format_var.get() == "jpeg" else "disabled"
-        for child in self.q_frame.winfo_children(): child.configure(state=state)
+        if self.save_format_var.get() == "jpeg":
+            self.q_frame.pack(anchor="w", fill="x", pady=(0, 10), after=self.dialog.winfo_children()[0].winfo_children()[-2])
+        else:
+            self.q_frame.pack_forget()
 
-    def _save_close(self):
+    def _save_and_close(self):
         self.settings.set("show_toolbar", self.show_toolbar_var.get())
         self.settings.set("save_format", self.save_format_var.get())
         self.settings.set("jpeg_quality", self.jpeg_quality_var.get())
