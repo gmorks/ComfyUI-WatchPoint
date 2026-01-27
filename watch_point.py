@@ -46,169 +46,23 @@ class ShutdownRegistry:
 # Create global instance
 shutdown_registry = ShutdownRegistry()
 
-# Logging Structured
+# Logging Structured (Simplified)
 class WatchPointLogger:
-    """Structured logging system for WatchPoint"""
+    """Simple logging system for WatchPoint"""
     
     def __init__(self):
         self.enabled = True
-        self.log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR
-        self.logs = []
-        self.max_logs = 100
-        self.debug_mode = False
-        self.debug_log_dir = "debug_logs"
-        self.debug_session_id = None
-        self.config_file = os.path.join(os.path.dirname(__file__), "watchpoint_debug_config.json")
-        self.load_debug_config()
     
     def log(self, level, message, component="WatchPoint"):
-        """Log a message with level and component"""
-        if not self.enabled:
-            return
-        
-        # Check log level
-        levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3}
-        if levels.get(level, 1) < levels.get(self.log_level, 1):
-            return
-        
+        if not self.enabled: return
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = {
-            "timestamp": timestamp,
-            "level": level,
-            "component": component,
-            "message": message
-        }
-        
-        self.logs.append(log_entry)
-        
-        # Keep only the latest logs
-        if len(self.logs) > self.max_logs:
-            self.logs.pop(0)
-        
-        # Always print errors
-        if level == "ERROR":
-            print(f"WatchPoint [{timestamp}] {level}: {message}")
-        elif level == "WARNING":
+        if level in ["ERROR", "WARNING"]:
             print(f"WatchPoint [{timestamp}] {level}: {message}")
     
-    def debug(self, message, component="WatchPoint"):
-        self.log("DEBUG", message, component)
-    
-    def info(self, message, component="WatchPoint"):
-        self.log("INFO", message, component)
-    
-    def warning(self, message, component="WatchPoint"):
-        self.log("WARNING", message, component)
-    
-    def error(self, message, component="WatchPoint"):
-        self.log("ERROR", message, component)
-        
-    def get_logs(self, level=None, component=None):
-        """Get filtered logs by level and component"""
-        filtered_logs = self.logs
-        
-        if level:
-            filtered_logs = [log for log in filtered_logs if log["level"] == level]
-        
-        if component:
-            filtered_logs = [log for log in filtered_logs if log["component"] == component]
-        
-        return filtered_logs
-    
-    def clear_logs(self):
-        """Clear all logs"""
-        self.logs = []
-    
-    def set_debug_mode(self, enabled=True):
-        """Enable/Disable debug mode"""
-        self.debug_mode = enabled
-        if enabled:
-            self.debug_session_id = time.strftime("%Y%m%d_%H%M%S")
-            
-            os.makedirs(self.debug_log_dir, exist_ok=True)
-            self.info(f"Debug mode enabled - Session: {self.debug_session_id}", "Debug")
-        else:
-            self.info("Debug mode disabled", "Debug")
-        
-        
-        self.save_debug_config()
-    
-    def load_debug_config(self):
-        """Load debug configuration from file"""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    config = json.load(f)
-                    self.debug_mode = config.get('debug_mode', False)
-                    if self.debug_mode:
-                        self.debug_session_id = time.strftime("%Y%m%d_%H%M%S")
-                        self.info(f"Persistent debug mode activated - Session: {self.debug_session_id}", "Debug")
-        except Exception as e:
-            self.error(f"Error loading debug config: {e}", "Debug")
-    
-    def save_debug_config(self):
-        """Save debug configuration to file"""
-        try:
-            config = {
-                'debug_mode': self.debug_mode,
-                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
-            }
-            with open(self.config_file, 'w') as f:
-                json.dump(config, f, indent=2)
-        except Exception as e:
-            self.error(f"Error saving debug config: {e}", "Debug")
-    
-    def save_debug_dump(self, watch_point_instance=None):
-        """Save complete debug dump with stats, threads, and logs"""
-        if not self.debug_mode:
-            return
-        
-        # Prevent infinite recursion
-        if hasattr(self, '_saving_dump') and self._saving_dump:
-            return None
-        
-        try:
-            self._saving_dump = True
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"debug_dump_{self.debug_session_id}_{timestamp}.log"
-            filepath = os.path.join(self.debug_log_dir, filename)
-            
-            debug_data = {
-                "timestamp": timestamp,
-                "session_id": self.debug_session_id,
-                "system_info": {
-                    "python_version": sys.version,
-                    "platform": sys.platform,
-                    "threading_active": threading.active_count()
-                }
-            }
-            
-            
-            if watch_point_instance and hasattr(watch_point_instance, 'get_health_stats'):
-                debug_data["health_stats"] = watch_point_instance.get_health_stats()
-            
-            
-            if watch_point_instance and hasattr(watch_point_instance, 'debug_threads'):
-                # Call the function directly without going through the logger to avoid recursion
-                debug_data["thread_info"] = watch_point_instance.debug_threads()
-            
-            
-            debug_data["recent_logs"] = self.get_logs()[-50:]  # Last 50 logs
-            
-            # Save to file
-            with open(filepath, 'w', encoding='utf-8') as f:
-                import json
-                json.dump(debug_data, f, indent=2, default=str)
-            
-            self.info(f"Debug dump saved: {filename}", "Debug")
-            return filepath
-            
-        except Exception as e:
-            self.error(f"Error saving debug dump: {e}", "Debug")
-            return None
-        finally:
-            # Clear recursion flag
-            self._saving_dump = False
+    def debug(self, message, component="WatchPoint"): pass # Debug silenced
+    def info(self, message, component="WatchPoint"): self.log("INFO", message, component)
+    def warning(self, message, component="WatchPoint"): self.log("WARNING", message, component)
+    def error(self, message, component="WatchPoint"): self.log("ERROR", message, component)
 
 # Create global logger
 wp_logger = WatchPointLogger()
@@ -415,26 +269,14 @@ class WindowManager:
             try:
                 root.mainloop()
             except RuntimeError as e:
-                # Common RuntimeError when closing: "main thread is not in main loop"
                 if "main thread" not in str(e):
                     wp_logger.error(f"RuntimeError in mainloop: {e}", "WindowLoop")
-                    # Trigger debug dump on critical error
-                    if wp_logger.debug_mode:
-                        wp_logger.save_debug_dump()
                     raise
-                else:
-                    wp_logger.debug(f"Expected RuntimeError in mainloop: {e}", "WindowLoop")
             except Exception as e:
-                # Trigger debug dump on thread errors (Tcl_AsyncDelete)
-                if wp_logger.debug_mode and ("Tcl_AsyncDelete" in str(e) or "async handler" in str(e)):
-                    wp_logger.save_debug_dump()
                 wp_logger.error(f"Error in Tkinter mainloop: {e}", "WindowLoop")
         
         except Exception as e:
             wp_logger.error(f"Error in window {display_idx}: {e}", "WindowLoop")
-            # Trigger debug dump on critical window error
-            if wp_logger.debug_mode:
-                wp_logger.save_debug_dump()
         
         finally:
             # IMPROVED: Cleanup with multiple attempts and Tkinter cleanup
@@ -474,40 +316,6 @@ class WindowManager:
                     if attempt == 2:
                         wp_logger.error(f"Cleanup failed after 3 attempts: {e}", "WindowLoop")
                     time.sleep(0.05)
-
-    def restore_window(self, display_idx):
-        """Restore a minimized window - To recover it from the taskbar!"""
-        if display_idx in self.windows:
-            win_data = self.windows[display_idx]
-            
-            # Check if it's minimized
-            if not win_data.get("minimized", False):
-                wp_logger.debug(f"Window {display_idx} is not minimized", "RestoreWindow")
-                return False
-            
-            instance = win_data.get("instance")
-            if not instance:
-                wp_logger.warning(f"Cannot restore window {display_idx}: invalid instance", "RestoreWindow")
-                return False
-            
-            try:
-                # Restore the window using the instance's root
-                if hasattr(instance, 'root') and instance.root:
-                    instance.root.deiconify()  # Make visible again
-                    instance.root.lift()  # Bring to front
-                    instance.root.focus_force()  # Give focus
-                    
-                    # Update state
-                    win_data["minimized"] = False
-                    wp_logger.info(f"Window {display_idx} restored successfully", "RestoreWindow")
-                return True
-                
-            except Exception as e:
-                wp_logger.error(f"Error restoring window {display_idx}: {e}", "RestoreWindow")
-                return False
-        else:
-            wp_logger.warning(f"Window {display_idx} does not exist", "RestoreWindow")
-            return False
 
     def _apply_icon(self, root):
         """Applies the icon from a file to the window."""
@@ -641,23 +449,6 @@ class WindowManager:
             except Exception as e:
                 wp_logger.error(f"Error in force cleanup: {e}", "Cleanup")
 
-    def get_health_stats(self):
-        """Get health statistics of the system"""
-        stats = {
-            "total_windows_created": len(self.windows),
-            "active_windows": len([w for w in self.windows.values() if w.get("running", False)]),
-            "closing_windows": len([w for w in self.windows.values() if w.get("closing", False)]),
-            "threads_alive": len([w for w in self.windows.values() if w.get("thread") and w["thread"].is_alive()]),
-            "watchdog_status": "running" if hasattr(self, 'watchdog_thread') and self.watchdog_thread.is_alive() else "stopped",
-            "shutdown_event": self.shutdown_event.is_set(),
-            "uptime": time.time() - getattr(self, '_start_time', time.time())
-        }
-        
-        # Add thread information
-        import threading
-        stats["total_threads"] = threading.active_count()
-        
-        return stats
     def shutdown(self):
         """Shutdown global del WindowManager without using atexit"""
         wp_logger.info("Initiating global shutdown...", "WindowManager")
@@ -736,11 +527,6 @@ class WatchPoint:
 
         ui_images = self._prepare_preview(images) if floating_preview else []
         
-        # NEW: Automatically save dump if debug is enabled
-        if wp_logger.debug_mode:
-            wp_logger.info("Saving automatic dump - WatchPoint executed", "WatchPoint")
-            wp_logger.save_debug_dump(self)
-        
         return {"ui": {"images": ui_images}, "result": (images,)}
 
     def _prepare_preview(self, images):
@@ -761,90 +547,6 @@ class WatchPoint:
         """Cleanup del nodo WatchPoint sin usar atexit"""
         if hasattr(self, 'window_manager'):
             self.window_manager.shutdown()
-    
-    def get_logs(self, level=None, component=None):
-        """Get system logging logs"""
-        return wp_logger.get_logs(level, component)
-    
-    def clear_logs(self):
-        """Clear all logs"""
-        wp_logger.clear_logs()
-        wp_logger.info("Logs cleared", "WatchPoint")
-    
-    def set_debug_mode(self, enabled=True):
-        """Enable/Disable debug mode"""
-        wp_logger.set_debug_mode(enabled)
-        if enabled:
-            wp_logger.info("Debug mode enabled for WatchPoint", "WatchPoint")
-        else:
-            wp_logger.info("Debug mode disabled for WatchPoint", "WatchPoint")
-    
-    def save_debug_dump(self):
-        """Save complete debug dump"""
-        filepath = wp_logger.save_debug_dump(self)
-        if filepath:
-            wp_logger.info(f"Debug dump saved at: {filepath}", "WatchPoint")
-        return filepath
-    
-    def get_health_stats(self):
-        """Get system health statistics"""
-        return self.window_manager.get_health_stats()
-    
-    def debug_threads(self):
-        """Debug command to inspect threads"""
-        import threading
-        
-        debug_info = {
-            "total_threads": threading.active_count(),
-            "threads": [],
-            "window_threads": [],
-            "daemon_threads": []
-        }
-        
-        # Inspect all threads
-        for thread in threading.enumerate():
-            thread_info = {
-                "name": thread.name,
-                "ident": thread.ident,
-                "is_alive": thread.is_alive(),
-                "is_daemon": thread.daemon,
-                "thread_type": type(thread).__name__
-            }
-            
-            debug_info["threads"].append(thread_info)
-            
-            if thread.daemon:
-                debug_info["daemon_threads"].append(thread_info)
-        
-        # Inspect window threads
-        if hasattr(self, 'window_manager') and hasattr(self.window_manager, 'windows'):
-            for window_id, window_data in self.window_manager.windows.items():
-                if window_data.get('thread'):
-                    thread = window_data['thread']
-                    window_thread_info = {
-                        "window_id": window_id,
-                        "thread_name": thread.name,
-                        "thread_ident": thread.ident,
-                        "is_alive": thread.is_alive(),
-                        "running": window_data.get('running', False),
-                        "closing": window_data.get('closing', False)
-                    }
-                    debug_info["window_threads"].append(window_thread_info)
-        
-        # Add watchdog information
-        if hasattr(self.window_manager, 'watchdog_thread'):
-            watchdog = self.window_manager.watchdog_thread
-            debug_info["watchdog"] = {
-                "name": watchdog.name,
-                "ident": watchdog.ident,
-                "is_alive": watchdog.is_alive(),
-                "is_daemon": watchdog.daemon
-            }
-        
-        wp_logger.info(f"Debug threads executed: {debug_info['total_threads']} active threads, "
-                      f"{len(debug_info['window_threads'])} window threads, "
-                      f"{len(debug_info['daemon_threads'])} daemon threads", "WatchPoint")
-        return debug_info
 
 # Tkinter UI Classes
 class WatchPointWindow:
@@ -1158,22 +860,6 @@ class WatchPointSettingsDialog:
 NODE_CLASS_MAPPINGS = {"WatchPoint": WatchPoint}
 NODE_DISPLAY_NAME_MAPPINGS = {"WatchPoint": "👁️ Watch Point"}
 
-# Signal Scout Integration
-class WPSignalScout:
-    """A simple node to send text to all Watch Point windows."""
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"text": ("STRING", {"multiline": True, "default": ""})}}
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "scout_signal"
-    CATEGORY = "WatchPoint"
-
-    def scout_signal(self, text):
-        try:
-            WindowManager().update_all_text(text)
-        except Exception as e:
-            print(f"WP_Scout Error: Could not connect to Watch Point window: {e}")
-
 # Global Shutdown Function
 def cleanup_all_watchpoints():
     """Function to clean up all WatchPoint nodes without using atexit"""
@@ -1181,76 +867,3 @@ def cleanup_all_watchpoints():
 
 # Add the function to the module so it's available
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "cleanup_all_watchpoints"]
-
-NODE_CLASS_MAPPINGS["WPSignalScout"] = WPSignalScout
-NODE_DISPLAY_NAME_MAPPINGS["WPSignalScout"] = "📡 WP Signal Scout"
-
-# Debug Node
-class WatchPointDebug:
-    """Debug node for WatchPoint - Controls debug mode and captures dumps"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "action": (["enable_debug", "disable_debug", "save_dump", "get_stats", "get_threads"],),
-            }
-        }
-    
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "execute_debug_action"
-    CATEGORY = "WatchPoint"
-    
-    def execute_debug_action(self, action):
-        """Execute debug action and return result"""
-        
-        if action == "enable_debug":
-            wp_logger.set_debug_mode(True)
-            return ("✅ Debug mode enabled",)
-            
-        elif action == "disable_debug":
-            wp_logger.set_debug_mode(False)
-            return ("⚪ Debug mode disabled",)
-            
-        elif action == "save_dump":
-            # Find an active WatchPoint instance
-            watchpoint_instance = self._find_watchpoint_instance()
-            filepath = wp_logger.save_debug_dump(watchpoint_instance)
-            if filepath:
-                return (f"💾 Debug dump saved: {os.path.basename(filepath)}",)
-            else:
-                return ("❌ Error saving debug dump (debug mode disabled?)",)
-                
-        elif action == "get_stats":
-            watchpoint_instance = self._find_watchpoint_instance()
-            if watchpoint_instance and hasattr(watchpoint_instance, 'get_health_stats'):
-                stats = watchpoint_instance.get_health_stats()
-                stats_text = json.dumps(stats, indent=2, default=str)
-                return (f"📊 Health Statistics:\n{stats_text}",)
-            else:
-                return ("ℹ️ No active WatchPoint instance found",)
-                
-        elif action == "get_threads":
-            watchpoint_instance = self._find_watchpoint_instance()
-            if watchpoint_instance and hasattr(watchpoint_instance, 'debug_threads'):
-                threads = watchpoint_instance.debug_threads()
-                threads_text = json.dumps(threads, indent=2, default=str)
-                return (f"🧵 Thread Information:\n{threads_text}",)
-            else:
-                return ("ℹ️ No active WatchPoint instance found",)
-        
-        return ("❌ Action not recognized",)
-    
-    def _find_watchpoint_instance(self):
-        """Find an active WatchPoint instance in the global registry"""
-        try:
-            for node in shutdown_registry._nodes:
-                if isinstance(node, WatchPoint):
-                    return node
-        except Exception:
-            pass
-        return None
-
-# Add the debug node to mappings
-NODE_CLASS_MAPPINGS["WatchPointDebug"] = WatchPointDebug
-NODE_DISPLAY_NAME_MAPPINGS["WatchPointDebug"] = "🔧 Watch Point Debug"

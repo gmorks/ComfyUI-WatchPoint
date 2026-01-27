@@ -30,7 +30,6 @@ Watch Point provides two simultaneous preview methods:
 - Save images directly from preview
 - Copy to clipboard
 - Customizable settings
-- Signal Scout Panel: Display text from your workflow in a side panel.
 - Thread Safety: Windows minimize instead of closing to prevent ComfyUI crashes
 
 ### Floating Preview (JavaScript)
@@ -93,52 +92,13 @@ The main preview node.
 3. Enable/disable previews:
 * `floating_preview`: Enable ComfyUI's built-in preview.
 * `monitor_preview`: Enable the external monitor window.
-
-
 4. Select the target `monitor` from the dropdown.
 5. The node acts as a pass-through for the `IMAGE` output.
 
-### WP Signal Scout
+### Optional string input
 
-A debug node to send text to the Monitor Preview window.
-
-1. Add **WP Signal Scout** to your workflow (found in `WatchPoint/Debug`).
-2. Connect any `STRING` input.
-3. The text will appear in the side panel of the external window.
-
-### Utility Nodes (Optional)
-
-These nodes provide additional functionality and can be enabled/disabled via configuration.
-
-#### WatchPoint Debug Toggle
-
-A simple node to enable/disable persistent debug mode for WatchPoint nodes.
-
-* **Function**: Toggle debug mode with a single click
-* **Location**: `WatchPoint/Utils` (when enabled)
-* **Usage**: Connect to any workflow to activate debug logging
-
-#### WatchPoint Restore Window
-
-A utility node to restore minimized WatchPoint windows.
-
-* **Function**: Recover hidden/minimized windows
-* **Location**: `WatchPoint/Utils` (when enabled)
-* **Usage**: Add to workflow when windows need restoration
-
-**Note**: Utility nodes are loaded optionally. To enable/disable them, modify the `__init__.py` file.
-
-### Example Workflow
-
-```
-[Primitive] → [WP Signal Scout]
-   (text)          ↓ (sends text to window)
-
-[Load Image] → [Watch Point] → [Upscale] → [Save Image]
-                     ↓
-              (Dual Preview)
-
-```
+1. Connect any `STRING` input.
+2. The text will appear in the side panel of the external window.
 
 ---
 
@@ -154,16 +114,14 @@ A utility node to restore minimized WatchPoint windows.
 
 * **R**: Reset zoom and pan
 * **T**: Toggle toolbar
-* **P**: Toggle Signal Scout panel
+* **P**: Toggle Text panel
 * **1**: Zoom 1:1 (100% actual size)
-* **ESC**: Close window
 
 ### Window Close Behavior
 
 **Important**: The Windows close button (❌) minimizes the window instead of closing it. This prevents threading errors and keeps ComfyUI stable. To "close" the window:
 
 * Click the close button → Window minimizes to taskbar
-* Use **ESC** key to properly close the window
 * Right-click taskbar icon → "Close window" for forced closure
 
 ### Toolbar Buttons
@@ -182,22 +140,6 @@ A utility node to restore minimized WatchPoint windows.
 
 Access settings via the **⚙ Settings** button in the toolbar.
 
-### Window Size
-
-* Fixed sizes: 800x600, 1024x768, 1280x720, 1920x1080
-* Dynamic sizes:
-* **Half Vertical**: Half screen width, full height
-* **Half Horizontal**: Full width, half screen height
-* **Quarter**: Half width, half height
-
-
-
-### Window Position
-
-* Set exact X, Y coordinates for window placement
-* Leave empty for automatic positioning
-* Example: X=0, Y=0 for top-left corner
-
 ### Save Options
 
 * Default format: PNG, JPEG, or WebP
@@ -208,33 +150,6 @@ Access settings via the **⚙ Settings** button in the toolbar.
 * Show/hide toolbar by default
 
 All settings are saved to `watchpoint_settings.json`
-
----
-
-## 🔧 Utility Nodes Configuration
-
-Utility nodes (WatchPoint Debug Toggle and WatchPoint Restore Window) are optional and can be enabled/disabled:
-
-### Enabling Utility Nodes
-
-1. Open `__init__.py` in the ComfyUI-WatchPoint folder
-2. Ensure the import block is uncommented:
-
-```python
-try:
-    from .nodes.watchpoint_utils import NODE_CLASS_MAPPINGS as UTILS_CLASS, NODE_DISPLAY_NAME_MAPPINGS as UTILS_DISPLAY
-    NODE_CLASS_MAPPINGS.update(UTILS_CLASS)
-    NODE_DISPLAY_NAME_MAPPINGS.update(UTILS_DISPLAY)
-    print("WatchPoint Utils loaded: Debug Toggle and Restore Window available")
-except ImportError as e:
-    print(f"WatchPoint Utils not available: {e}")
-    pass
-
-```
-
-### Disabling Utility Nodes
-
-Comment out or remove the import block in `__init__.py` to disable utility nodes.
 
 ---
 
@@ -516,6 +431,5 @@ MIT License - Feel free to use and modify!
 ### v1.0.0 - Initial Release
 
 * Dual preview system (Monitor + Floating)
-* Signal Scout text display
 * Basic window controls and settings
 * Multi-monitor support
