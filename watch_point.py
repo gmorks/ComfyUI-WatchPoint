@@ -1023,10 +1023,12 @@ class WatchPointWindow:
 
     def _set_fullscreen(self, value):
         target_fullscreen = bool(value)
-        current_fullscreen = bool(self.root.attributes("-fullscreen"))
+        # current_fullscreen check removed as we track state manually for fake fullscreen
+
         
         # Avoid redundant operations if state matches
-        if target_fullscreen == current_fullscreen:
+        # Note: In fake fullscreen, we check our internal flag since attributes("-fullscreen") won't be true
+        if target_fullscreen == self.fullscreen_active:
             self.fullscreen_active = target_fullscreen
             self._update_fullscreen_btn_style()
             return
@@ -1043,9 +1045,13 @@ class WatchPointWindow:
             self._fullscreen_pending = True
             
             # 1. Save previous geometry ONLY if we are coming from a non-fullscreen state
-            if not current_fullscreen:
-                self.pre_fullscreen_geometry = self.root.geometry()
-                wp_logger.debug(f"Fullscreen: Saved geometry {self.pre_fullscreen_geometry}", "WatchPointWindow")
+            if not self.fullscreen_active: # Logic check: we just set it True above, but conceptually we mean "previous state"
+                 pass # Logic below needs adjustment. 
+            
+            # Use internal flag for logic since we don't use OS fullscreen attribute anymore
+            # If we are entering fullscreen, save current geometry
+            self.pre_fullscreen_geometry = self.root.geometry()
+            wp_logger.debug(f"Fullscreen: Saved geometry {self.pre_fullscreen_geometry}", "WatchPointWindow")
 
             try:
                 # 2. Prepare window: Force 'normal' state
@@ -1114,42 +1120,34 @@ class WatchPointWindow:
                     self.root.update_idletasks()
                     self.root.update()
                 
-                # 5. Delayed activation with verification
-                def activate_fullscreen():
-                    if not self.fullscreen_active:
-                        self._fullscreen_pending = False
-                        return
+                # 5. Apply "Fake Fullscreen" (Borderless window at exact monitor coordinates)
+                # This bypasses the OS fullscreen behavior which often defaults to the wrong monitor
+                try:
+                    self.root.overrideredirect(True)
+                    self.root.geometry(f"{mw}x{mh}+{mx}+{my}")
+                    self.root.state('normal')
                     
-                    try:
-                        # Final position check
-                        final_x = self.root.winfo_x()
-                        final_y = self.root.winfo_y()
-                        wp_logger.info(f"Fullscreen: Activating at position ({final_x}, {final_y})", "WatchPointWindow")
-                        
-                        self.root.attributes("-fullscreen", True)
-                        wp_logger.info(f"Fullscreen activated on monitor at ({mx}, {my})", "WatchPointWindow")
-                    except tk.TclError as e:
-                        wp_logger.error(f"Failed to activate fullscreen: {e}", "WatchPointWindow")
-                    finally:
-                        self._fullscreen_pending = False
-                        self._update_fullscreen_btn_style()
-                
-                # Wait 150ms instead of 100ms for better reliability
-                self.root.after(150, activate_fullscreen)
+                    # Ensure window is on top and focused
+                    self.root.lift()
+                    self.root.focus_force()
+                    
+                    wp_logger.info(f"Fullscreen activated (fake mode) on monitor at ({mx}, {my}) size {mw}x{mh}", "WatchPointWindow")
+                except tk.TclError as e:
+                    wp_logger.error(f"Failed to activate fullscreen: {e}", "WatchPointWindow")
+                finally:
+                    self._fullscreen_pending = False
+                    self._update_fullscreen_btn_style()
                 
             except Exception as e:
                 wp_logger.error(f"Fullscreen setup error: {e}", "WatchPointWindow")
-                # Fallback: try immediate activation if logic fails
-                try:
-                    self.root.attributes("-fullscreen", True)
-                except:
-                    pass
                 self._fullscreen_pending = False
                 self._update_fullscreen_btn_style()
         else:
             # EXIT FULLSCREEN
             try:
-                self.root.attributes("-fullscreen", False)
+                # Restore window decorations
+                self.root.overrideredirect(False)
+                self.root.state('normal')
                 self.root.update_idletasks()
             except tk.TclError:
                 pass

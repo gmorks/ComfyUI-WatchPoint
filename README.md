@@ -409,6 +409,11 @@ pip install pywin32
 * Verify that `monitor_preview` is enabled (True); when False, the window stays open but the image will not refresh.
 * Try disabling/re-enabling monitor preview.
 
+### Window snapping (Win + Arrows) doesn't work in Fullscreen
+
+*   **Reason**: To guarantee that fullscreen mode activates on the correct monitor (avoiding a Windows bug that forces it to Monitor 0), we use a custom "borderless window" approach.
+*   **Solution**: To move the window to another monitor, exit fullscreen (F11 or toolbar button), drag the window to the desired monitor, and re-enable fullscreen. Alternatively, use the Monitor selector in Settings.
+
 ### Floating preview not working
 
 * Ensure `floating_preview` is enabled (True)
