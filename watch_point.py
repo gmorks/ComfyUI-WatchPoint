@@ -936,6 +936,7 @@ class WatchPointWindow:
         self.root.bind("<t>", lambda e: self._toggle_toolbar())
         self.root.bind("<p>", lambda e: self._toggle_drawer())
         self.root.bind("<F11>", lambda e: self._toggle_fullscreen())
+        self.root.bind("<Escape>", lambda e: self._set_fullscreen(False))
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _set_initial_state(self):
@@ -1297,7 +1298,7 @@ class WatchPointSettingsDialog:
                 print(f"Watch Point: Error listing monitors: {e}")
 
         tk.Checkbutton(frame, text="Show Toolbar on Startup", variable=self.show_toolbar_var).pack(anchor="w")
-        tk.Checkbutton(frame, text="Start in Fullscreen Mode", variable=self.start_fullscreen_var).pack(anchor="w")
+        tk.Checkbutton(frame, text="Start in Fullscreen Mode. Need ComfyUI restart to apply.", variable=self.start_fullscreen_var).pack(anchor="w")
         
         fmt_frame = tk.LabelFrame(frame, text="Default Save Format", padx=10, pady=10)
         fmt_frame.pack(anchor="w", fill="x", pady=(10, 5))
