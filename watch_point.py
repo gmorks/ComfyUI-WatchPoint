@@ -198,8 +198,15 @@ class MonitorTracker:
         # 1. Try Windows ctypes (Most accurate for Windows)
         if self.user32:
             try:
+                # Need absolute coordinates
                 x = widget.winfo_rootx()
                 y = widget.winfo_rooty()
+                
+                # If window coordinates are weird (e.g. -32000 when minimized), fallback
+                if x < -10000 or y < -10000:
+                     # Use mouse pointer as fallback for detection if window is off-screen/minimized
+                     x, y = widget.winfo_pointerxy()
+                
                 width = widget.winfo_width()
                 height = widget.winfo_height()
                 
@@ -1015,26 +1022,192 @@ class WatchPointWindow:
         except tk.TclError: pass
 
     def _set_fullscreen(self, value):
-        self.fullscreen_active = bool(value)
+        target_fullscreen = bool(value)
+        current_fullscreen = bool(self.root.attributes("-fullscreen"))
         
-        # Monitor Detection for Fullscreen
-        if self.fullscreen_active:
-            try:
-                # Detect current monitor geometry
-                mx, my, mw, mh = self.monitor_tracker.get_monitor_geometry(self.root)
-                
-                wp_logger.info(f"Fullscreen: Detected monitor at ({mx}, {my}) size {mw}x{mh}", "WatchPointWindow")
+        # Avoid redundant operations if state matches
+        if target_fullscreen == current_fullscreen:
+            self.fullscreen_active = target_fullscreen
+            self._update_fullscreen_btn_style()
+            return
 
-                # Apply geometry to ensure fullscreen on correct monitor
-                self.root.geometry(f"{mw}x{mh}+{mx}+{my}")
+        # Prevent multiple activations during transition
+        if hasattr(self, '_fullscreen_pending') and self._fullscreen_pending:
+            wp_logger.debug("Fullscreen transition already in progress, ignoring request", "WatchPointWindow")
+            return
+
+        self.fullscreen_active = target_fullscreen
+        
+        if self.fullscreen_active:
+            # ENTER FULLSCREEN
+            self._fullscreen_pending = True
+            
+            # 1. Save previous geometry ONLY if we are coming from a non-fullscreen state
+            if not current_fullscreen:
+                self.pre_fullscreen_geometry = self.root.geometry()
+                wp_logger.debug(f"Fullscreen: Saved geometry {self.pre_fullscreen_geometry}", "WatchPointWindow")
+
+            try:
+                # 2. Prepare window: Force 'normal' state
+                self.root.state('normal')
                 self.root.update_idletasks()
+                
+                # 3. Detect target monitor USING CURRENT WINDOW POSITION
+                # Get the window's current position before moving
+                current_x = self.root.winfo_x()
+                current_y = self.root.winfo_y()
+                current_w = self.root.winfo_width()
+                current_h = self.root.winfo_height()
+                
+                # Calculate center point of window
+                center_x = current_x + current_w // 2
+                center_y = current_y + current_h // 2
+                
+                wp_logger.info(f"Fullscreen: Window center at ({center_x}, {center_y})", "WatchPointWindow")
+                
+                # Find which monitor contains this center point
+                target_monitor = None
+                
+                # Try screeninfo first (most reliable)
+                if SCREENINFO_AVAILABLE:
+                    try:
+                        from screeninfo import get_monitors
+                        for m in get_monitors():
+                            if (m.x <= center_x < m.x + m.width) and (m.y <= center_y < m.y + m.height):
+                                target_monitor = (m.x, m.y, m.width, m.height)
+                                wp_logger.info(f"Fullscreen: Found monitor via screeninfo: {target_monitor}", "WatchPointWindow")
+                                break
+                    except Exception as e:
+                        wp_logger.warning(f"Screeninfo failed: {e}", "WatchPointWindow")
+                
+                # Fallback to Windows API
+                if not target_monitor and sys.platform.startswith("win") and CTYPES_AVAILABLE:
+                    try:
+                        user32 = ctypes.windll.user32
+                        point = wintypes.POINT(center_x, center_y)
+                        MONITOR_DEFAULTTONEAREST = 2
+                        hMonitor = user32.MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+                        
+                        mi = MONITORINFO()
+                        mi.cbSize = ctypes.sizeof(MONITORINFO)
+                        
+                        if user32.GetMonitorInfoW(hMonitor, ctypes.byref(mi)):
+                            r = mi.rcMonitor
+                            target_monitor = (r.left, r.top, r.right - r.left, r.bottom - r.top)
+                            wp_logger.info(f"Fullscreen: Found monitor via Windows API: {target_monitor}", "WatchPointWindow")
+                    except Exception as e:
+                        wp_logger.warning(f"Windows API failed: {e}", "WatchPointWindow")
+                
+                # Final fallback
+                if not target_monitor:
+                    target_monitor = (0, 0, self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+                    wp_logger.warning(f"Fullscreen: Using fallback monitor: {target_monitor}", "WatchPointWindow")
+                
+                mx, my, mw, mh = target_monitor
+
+                # 4. Move window to exact monitor coordinates
+                # Use overrideredirect temporarily to bypass window manager
+                self.root.geometry(f"{mw}x{mh}+{mx}+{my}")
+                
+                # Force multiple updates
+                for _ in range(3):
+                    self.root.update_idletasks()
+                    self.root.update()
+                
+                # 5. Delayed activation with verification
+                def activate_fullscreen():
+                    if not self.fullscreen_active:
+                        self._fullscreen_pending = False
+                        return
+                    
+                    try:
+                        # Final position check
+                        final_x = self.root.winfo_x()
+                        final_y = self.root.winfo_y()
+                        wp_logger.info(f"Fullscreen: Activating at position ({final_x}, {final_y})", "WatchPointWindow")
+                        
+                        self.root.attributes("-fullscreen", True)
+                        wp_logger.info(f"Fullscreen activated on monitor at ({mx}, {my})", "WatchPointWindow")
+                    except tk.TclError as e:
+                        wp_logger.error(f"Failed to activate fullscreen: {e}", "WatchPointWindow")
+                    finally:
+                        self._fullscreen_pending = False
+                        self._update_fullscreen_btn_style()
+                
+                # Wait 150ms instead of 100ms for better reliability
+                self.root.after(150, activate_fullscreen)
+                
             except Exception as e:
+                wp_logger.error(f"Fullscreen setup error: {e}", "WatchPointWindow")
+                # Fallback: try immediate activation if logic fails
+                try:
+                    self.root.attributes("-fullscreen", True)
+                except:
+                    pass
+                self._fullscreen_pending = False
+                self._update_fullscreen_btn_style()
+        else:
+            # EXIT FULLSCREEN
+            try:
+                self.root.attributes("-fullscreen", False)
+                self.root.update_idletasks()
+            except tk.TclError:
                 pass
 
-        try:
-            self.root.attributes("-fullscreen", self.fullscreen_active)
-        except tk.TclError:
-            pass
+            # Restore geometry logic
+            restored = False
+            
+            # 1. Try to restore from pre-fullscreen snapshot
+            if hasattr(self, 'pre_fullscreen_geometry') and self.pre_fullscreen_geometry:
+                try:
+                    # Basic validation: ensure width > 100 to avoid restoring 1x1 windows
+                    w_check = int(self.pre_fullscreen_geometry.split('x')[0])
+                    if w_check > 100:
+                        self.root.state('normal')
+                        self.root.geometry(self.pre_fullscreen_geometry)
+                        wp_logger.debug(f"Fullscreen: Restored geometry {self.pre_fullscreen_geometry}", "WatchPointWindow")
+                        self.pre_fullscreen_geometry = None
+                        restored = True
+                except Exception:
+                    pass
+            
+            # 2. Fallback to settings if snapshot failed or was invalid (e.g. start_fullscreen=True case)
+            if not restored:
+                try:
+                    self.root.state('normal')
+                    
+                    # Get saved preferences
+                    size_mode = self.settings.get("window_size_mode", "800x600")
+                    sx = self.settings.get("window_x", 0)
+                    sy = self.settings.get("window_y", 0)
+                    
+                    # Calculate geometry
+                    if "x" in str(size_mode) and size_mode not in ["Half Vertical", "Half Horizontal", "Quarter"]:
+                        # Standard WxH format
+                        sw = self.settings.get("window_width", 800)
+                        sh = self.settings.get("window_height", 600)
+                        geom_str = f"{sw}x{sh}+{sx}+{sy}"
+                    else:
+                        # Special modes
+                        geom_base = self.manager.calculate_geometry_string(self.root, size_mode, 800, 600)
+                        if "+" in geom_base:
+                            size_part = geom_base.split("+")[0]
+                            geom_str = f"{size_part}+{sx}+{sy}"
+                        else:
+                            geom_str = f"{geom_base}+{sx}+{sy}"
+                            
+                    self.root.geometry(geom_str)
+                    wp_logger.info(f"Fullscreen: Restored from settings: {geom_str}", "WatchPointWindow")
+                except Exception as e:
+                    wp_logger.warning(f"Error restoring geometry from settings: {e}", "WatchPointWindow")
+                    # Last resort
+                    self.root.geometry("800x600+100+100")
+
+            # Update button style immediately when exiting fullscreen
+            self._update_fullscreen_btn_style()
+
+
+    def _update_fullscreen_btn_style(self):
         if hasattr(self, "fullscreen_btn"):
             if self.fullscreen_active:
                 self.fullscreen_btn.config(relief=tk.SUNKEN, bg="#505050")

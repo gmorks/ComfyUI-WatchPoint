@@ -433,6 +433,9 @@ MIT License - Feel free to use and modify!
 
 **Note**: This extension is not yet compatible with ComfyUI Nodes 2.0. Support for the new node system is on our to-do list and will be implemented in a future update.
 
+### Known Issues
+*   **Fullscreen Mode**: Currently, toggling fullscreen (F11) may default to the primary monitor (Monitor 0) regardless of the window's current position. We are actively working on a fix to ensure fullscreen activates on the correct monitor. [WIP]
+
 ---
 
 ## Recent Changes
