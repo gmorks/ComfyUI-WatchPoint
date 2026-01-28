@@ -181,73 +181,7 @@ if sys.platform.startswith("win") and CTYPES_AVAILABLE:
             ("dwFlags", wintypes.DWORD),
         ]
 
-class MonitorTracker:
-    """Handles cross-platform monitor detection."""
-    def __init__(self):
-        self.user32 = None
-        if sys.platform.startswith("win") and CTYPES_AVAILABLE:
-            try:
-                self.user32 = ctypes.windll.user32
-            except Exception as e:
-                print(f"WatchPoint: Failed to load user32: {e}")
 
-    def get_monitor_geometry(self, widget):
-        """
-        Returns (x, y, width, height) of the monitor containing the widget's center.
-        """
-        # 1. Try Windows ctypes (Most accurate for Windows)
-        if self.user32:
-            try:
-                # Need absolute coordinates
-                x = widget.winfo_rootx()
-                y = widget.winfo_rooty()
-                
-                # If window coordinates are weird (e.g. -32000 when minimized), fallback
-                if x < -10000 or y < -10000:
-                     # Use mouse pointer as fallback for detection if window is off-screen/minimized
-                     x, y = widget.winfo_pointerxy()
-                
-                width = widget.winfo_width()
-                height = widget.winfo_height()
-                
-                cx = x + width // 2
-                cy = y + height // 2
-                
-                point = wintypes.POINT(cx, cy)
-                MONITOR_DEFAULTTONEAREST = 2
-                hMonitor = self.user32.MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
-                
-                mi = MONITORINFO()
-                mi.cbSize = ctypes.sizeof(MONITORINFO)
-                
-                if self.user32.GetMonitorInfoW(hMonitor, ctypes.byref(mi)):
-                    r = mi.rcMonitor
-                    return (r.left, r.top, r.right - r.left, r.bottom - r.top)
-            except Exception as e:
-                # Silently fail and try next method
-                pass
-        
-        # 2. Try screeninfo (Cross-platform if installed)
-        if SCREENINFO_AVAILABLE:
-            try:
-                # Need absolute coordinates
-                x = widget.winfo_rootx()
-                y = widget.winfo_rooty()
-                cx = x + widget.winfo_width() // 2
-                cy = y + widget.winfo_height() // 2
-                
-                for m in get_monitors():
-                    if (m.x <= cx < m.x + m.width) and (m.y <= cy < m.y + m.height):
-                        return (m.x, m.y, m.width, m.height)
-            except Exception:
-                pass
-                
-        # 3. Fallback to Tkinter screen info (Primary monitor or screen containing widget)
-        # Note: winfo_screenwidth/height typically return primary monitor size
-        try:
-            return (0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight())
-        except:
-            return (0, 0, 800, 600)
 
 # Settings Management
 class SettingsManager:
@@ -798,8 +732,8 @@ class WatchPointWindow:
         self.root = root
         self.display_idx = display_idx
         self.manager = manager
+
         self.settings = manager.settings_manager
-        self.monitor_tracker = MonitorTracker()
         
         # UI State
         self.zoom_level, self.pan_x, self.pan_y = 1.0, 0, 0

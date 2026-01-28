@@ -34,3 +34,5 @@ watchpoint_debug_config.json
 # Files not yet ready to be uploaded
 beta/
 
+# Temporal Backup files
+*.backup
