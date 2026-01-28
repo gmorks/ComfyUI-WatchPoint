@@ -508,7 +508,7 @@ class WindowManager:
         if SCREENINFO_AVAILABLE:
             try:
                 m = get_monitors()[display_idx]
-                root.geometry(f"+{m.x + 50}+{m.y + 50}")
+                root.geometry(f"+{m.x}+{m.y}")
                 position_set = True
             except IndexError:
                 print(f"Watch Point: Monitor index {display_idx} is out of range. Falling back.")
